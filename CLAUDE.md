@@ -45,7 +45,7 @@ Client/server talk over a UNIX socket. Args are parsed twice (once client-side f
 ## Gotchas
 
 - **`build-debug.sh` is at the root, not in `script/`.** Easy mistake.
-- **Debug server binary is `AeroSpaceApp`**, production is `AeroSpace`. If replacing the installed binary in place, copy with rename: `cp .debug/AeroSpaceApp /Applications/AeroSpace.app/Contents/MacOS/AeroSpace`.
+- **Debug server binary is `AeroSpaceApp`**, production is `AeroSpace`. If replacing the installed binary in place, copy with rename: `cp .debug/AeroSpaceApp /Applications/AeroSpace.app/Contents/MacOS/AeroSpace`, then **re-sign the whole bundle**: `codesign --force --deep --sign - /Applications/AeroSpace.app` (or `--sign aerospace-codesign-certificate` if you have the cert). Skipping this leaves the bundle's `_CodeSignature/CodeResources` referencing the old binary hash; TCC then can't validate against any stored Accessibility grant, and the patched `checkAccessibilityPermissions()` (`Sources/AppBundle/util/accessibility.swift`) runs `tccutil reset` + quits on every launch — symptom: app prompts for Accessibility, granting changes nothing.
 - **Don't overwrite the brew cask binary at `/opt/homebrew/Caskroom/aerospace/...`** — brew reverts it on upgrade. Either side-by-side launch the debug build, or replace inside `/Applications/AeroSpace.app/Contents/MacOS/` (brew won't touch that unless reinstalled).
 - **macOS re-prompts for Accessibility permission** on every unsigned debug rebuild unless you set Xcode's scheme Console to `Terminal` (per `dev-docs/development.md`).
 - **`swiftly init` rewrites `.swift-version`** to whatever toolchain it installed (e.g. `6.3.0` → `6.3.1`). The file is tracked — `git checkout -- .swift-version` before committing.

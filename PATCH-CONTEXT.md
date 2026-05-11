@@ -109,6 +109,36 @@ signing and macOS re-prompts for Accessibility permission on every
 rebuild. With the cert, TCC's designated requirement is stable across
 builds and the grant survives.
 
+### Re-signing must cover the whole bundle, not just the binary
+
+`codesign --sign … Contents/MacOS/AeroSpace` only updates the
+binary's embedded signature. The bundle's
+`_CodeSignature/CodeResources` manifest still references the *old*
+binary hash, so `codesign --verify /Applications/AeroSpace.app`
+reports `code has no resources but signature indicates they must be
+present`. TCC fails to validate the broken bundle against its stored
+Accessibility grant and the patched `checkAccessibilityPermissions()`
+falls into a `tccutil reset` + `terminateApp()` loop — granting in
+System Settings has no lasting effect.
+
+After any in-place binary swap, re-sign the bundle as a whole:
+
+```
+codesign --force --deep --sign - /Applications/AeroSpace.app
+# or, with the recommended cert:
+codesign --force --deep --sign aerospace-codesign-certificate /Applications/AeroSpace.app
+```
+
+Then `codesign --verify --strict /Applications/AeroSpace.app` should
+say `valid on disk` and `satisfies its Designated Requirement`.
+
+The chezmoi `run_after_build-aerospace-fork.sh.tmpl` install hook had
+this bug — it signed each staged inner binary and verified it in
+isolation, then `mv`'d the staged file into the bundle, leaving
+CodeResources stale. Fix: after both `install_atomic` calls, run
+`codesign --force --deep --sign "$SIGN_ARG" "$APP"` and
+`codesign --verify --strict "$APP"` against the bundle path.
+
 **`brew pin aerospace`** stops `brew upgrade` from reverting the
 patched binaries to stock. Without pinning, an upgrade replaces the
 patched binary; the script's next run detects the cdhash mismatch
