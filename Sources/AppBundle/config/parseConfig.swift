@@ -109,6 +109,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     "default-root-container-layout": Parser(\.defaultRootContainerLayout, parseLayout),
     "default-root-container-orientation": Parser(\.defaultRootContainerOrientation, parseDefaultContainerOrientation),
+    "default-window-mode": Parser(\.defaultWindowMode, parseDefaultWindowMode),
 
     "start-at-login": Parser(\.startAtLogin, parseBool),
     "auto-reload-config": Parser(\.autoReloadConfig, parseBool),
@@ -366,6 +367,13 @@ private func parseDefaultContainerOrientation(_ raw: Json, _ backtrace: ConfigBa
     parseString(raw, backtrace).flatMap {
         DefaultContainerOrientation(rawValue: $0)
             .orFailure(.semantic(backtrace, "Can't parse default container orientation '\($0)'"))
+    }
+}
+
+private func parseDefaultWindowMode(_ raw: Json, _ backtrace: ConfigBacktrace) -> ParsedConfig<DefaultWindowMode> {
+    parseString(raw, backtrace).flatMap {
+        DefaultWindowMode(rawValue: $0)
+            .orFailure(.semantic(backtrace, "Can't parse default window mode '\($0)'. Allowed values: tiling, floating"))
     }
 }
 

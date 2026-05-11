@@ -41,6 +41,7 @@ struct Config: ConvenienceCopyable {
     var _nonEmptyWorkspacesRootContainersLayoutOnStartup: Void = ()
     var defaultRootContainerLayout: Layout = .tiles
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
+    var defaultWindowMode: DefaultWindowMode = .tiling
     var startAtLogin: Bool = false
     var autoReloadConfig: Bool = false
     var automaticallyUnhideMacosHiddenApps: Bool = false
@@ -64,4 +65,18 @@ struct Config: ConvenienceCopyable {
 
 enum DefaultContainerOrientation: String {
     case horizontal, vertical, auto
+}
+
+// Initial parent for a newly detected window. `tiling` is upstream behavior
+// (window enters the workspace's root tiling container and gets tile-sized
+// on the next layout pass). `floating` makes the window a direct child of
+// the workspace — it never enters the tiling tree, so aerospace never sets
+// its frame to fill the workspace.
+//
+// This is useful for "I only use aerospace for workspace switching, not
+// tiling" setups: it eliminates the tile-maximize-then-shrink flash that
+// otherwise happens between on-window-detected firing 'layout floating'
+// and the layout pass completing.
+enum DefaultWindowMode: String {
+    case tiling, floating
 }

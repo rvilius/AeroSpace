@@ -215,7 +215,16 @@ private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: M
     return switch try await macApp.getAxUiElementWindowType(windowId, windowLevel) {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         case .dialog: BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        case .window: unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
+        case .window:
+            // When default-window-mode = 'floating', new windows are bound
+            // directly to the workspace (floating) instead of entering the
+            // root tiling container. This sidesteps the tile-maximize that
+            // the layout pass would otherwise apply — useful when aerospace
+            // is being used purely for workspace switching and every window
+            // is floated anyway via on-window-detected.
+            config.defaultWindowMode == .floating
+                ? BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+                : unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
     }
 }
 
