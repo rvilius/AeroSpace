@@ -87,24 +87,47 @@ flag — keeps existing tiling users on the default path.
 
 ## How to use it
 
-1. Build with `script/build-debug.sh` (needs `swiftly`; check `dev-docs/
-   development.md`). Debug build is a CLI binary, doesn't need codesign.
-2. Install: replace `/Applications/AeroSpace.app` and `/opt/homebrew/bin/
-   aerospace`, or run from `.debug/` directly. The chezmoi
-   `run_onchange_build-aerospace-tools.sh.tmpl` pattern is a model for
-   wiring this into autosync.
-3. In user's `~/.aerospace.toml` (managed via
-   `~/.local/share/chezmoi/dot_aerospace.toml.tmpl`):
-   - Add `default-window-mode = 'floating'`
+1. Build with `./build-debug.sh` (at repo root, **not** `script/`). Needs
+   `swiftly` (`brew install swiftly && swiftly init`); see `dev-docs/
+   development.md`. Debug build is unsigned and doesn't need codesign.
+   Produces `.debug/aerospace` (CLI) and `.debug/AeroSpaceApp` (server).
+   Note the name mismatch — production server is `AeroSpace`, debug build
+   is `AeroSpaceApp`. ~65s on M-series.
+2. Install. The brew cask binary at `/opt/homebrew/Caskroom/aerospace/
+   0.20.3-Beta/...` is codesigned and brew will revert it on next upgrade
+   — don't overwrite it. Two cleaner options:
+   - **Side-by-side**: kill running `AeroSpace` (PID from `pgrep -lf
+     '/Applications/AeroSpace.app'`), then launch `.debug/AeroSpaceApp`
+     directly. Use `.debug/aerospace` via full path for CLI, or symlink
+     it ahead of `/opt/homebrew/bin/aerospace` in PATH.
+   - **Replace the .app server binary in place**: `cp .debug/AeroSpaceApp
+     /Applications/AeroSpace.app/Contents/MacOS/AeroSpace` (note the
+     rename). Restart aerospace. Brew won't touch `/Applications` unless
+     reinstalled.
+   - Either way, **macOS will re-prompt for Accessibility permission**
+     for the unsigned debug binary — grant it in System Settings →
+     Privacy & Security → Accessibility.
+3. **Order matters**: install the patched binary BEFORE `chezmoi apply`
+   pushes `default-window-mode = 'floating'` to `~/.aerospace.toml` —
+   the unpatched aerospace will fail to parse the new key.
+4. In `~/.local/share/chezmoi/dot_aerospace.toml.tmpl`:
+   - Add `default-window-mode = 'floating'` (done in current branch)
    - Optionally drop `'layout floating'` from on-window-detected callbacks
      (windows are already floating when the callback fires, so the command
      is a no-op — harmless but redundant)
    - Optionally remove `'exec-and-forget snap-size'` from callbacks (no
      window will be tile-maximized to begin with)
-4. `aerospace reload-config` to pick up the new option without restart.
-5. Verify with `aerospace list-windows --workspace Personal --format
+5. `chezmoi apply && aerospace reload-config` to pick up the new option
+   without restart.
+6. Verify with `aerospace list-windows --workspace Personal --format
    '%{window-id} %{app-name}'` after opening an app — should appear at its
    natural size with no flash.
+
+## Build side effect to clean up
+
+`swiftly init` rewrites `.swift-version` to whatever toolchain it
+installed (e.g. `6.3.0` → `6.3.1`). The file is tracked. Before
+committing, restore with `git checkout -- .swift-version`.
 
 ## Open questions / risks
 
