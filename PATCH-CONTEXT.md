@@ -145,3 +145,30 @@ User's chezmoi repo: `~/.local/share/chezmoi/`
   source change. Same pattern could wrap aerospace fork build/install.
 - Commit `114b66a` (today): faster watchdog + snap-size polling loop, the
   best we could do without forking
+
+## Secondary patch: wallpaper-daemon notification
+
+`Sources/AppBundle/focus.swift` `onWorkspaceChanged` posts a
+`DistributedNotificationCenter` notification with name
+`sh.viliusr.aerospace.workspaceChanged` (object = new workspace name) after
+the existing `exec-on-workspace-change` block runs.
+
+This is consumed by `~/.config/aerospace/wallpaper-daemon` (a Swift
+LaunchAgent — pattern matches `snap-edges-daemon`). The daemon paints a
+borderless desktop-level `NSWindow` per `NSScreen` and swaps its NSImage on
+each notification, bypassing macOS's native wallpaper cross-fade so workspace
+switches are visually instant.
+
+Why a notification + external daemon rather than a config option
+(`[workspace.<name>] wallpaper = ...`) in the fork:
+- Keeps fork divergence minimal — one extra line in `focus.swift`, no new
+  config surface to maintain across upstream merges.
+- The macOS wallpaper cross-fade is unavoidable when calling
+  `NSWorkspace.setDesktopImageURL` (or `osascript`) from in-process, so a
+  config-driven NSWorkspace call wouldn't actually solve the visible flash.
+- The daemon owns its own workspace→image map; users with no daemon
+  installed see no behavior change beyond a no-op notification post.
+
+If upstream ever adds a workspace-changed event subscription via the CLI
+socket, this notification post can be replaced by an external subscriber and
+the patch line dropped.

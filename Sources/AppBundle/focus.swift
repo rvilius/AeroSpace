@@ -199,4 +199,9 @@ extension Workspace {
         process.environment = environment
         _ = Result { try process.run() }
     }
+    // Fork-only: notify the wallpaper-daemon (see PATCH-CONTEXT.md).
+    DistributedNotificationCenter.default().post(
+        name: Notification.Name("sh.viliusr.aerospace.workspaceChanged"),
+        object: newWorkspace,
+    )
 }
