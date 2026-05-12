@@ -19,19 +19,14 @@ final class MacWindow: Window {
     static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId)
-        let workspace = isStartup
-            ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
-            : focus.workspace
-        var data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil)
-        // When default-window-mode = 'floating', re-route newly detected
-        // .window-type nodes from the workspace's root tiling container
-        // directly to the workspace as floating. Skips the tile-maximize
-        // the layout pass would otherwise apply. Only applies to fresh
-        // registrations — `relayoutWindow` (re-layout on exit fullscreen,
-        // etc.) keeps the upstream tiling path via the same helper.
-        if config.defaultWindowMode == .floating, data.parent is TilingContainer {
-            data = BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        }
+        let data = try await unbindAndGetBindingDataForNewWindow(
+            windowId,
+            macApp,
+            isStartup
+                ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
+                : focus.workspace,
+            window: nil,
+        )
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
@@ -220,7 +215,18 @@ private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: M
     return switch try await macApp.getAxUiElementWindowType(windowId, windowLevel) {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         case .dialog: BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        case .window: unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
+        case .window:
+            // When default-window-mode = 'floating', new windows are bound
+            // directly to the workspace (floating) instead of entering the
+            // root tiling container. This sidesteps the tile-maximize that
+            // the layout pass would otherwise apply — useful when aerospace
+            // is being used purely for workspace switching and every window
+            // is floated anyway via on-window-detected. Lives in this helper
+            // (not getOrRegister) so it also covers relayoutWindow paths
+            // like validateStillPopups (Slack's popup→window reclassify).
+            config.defaultWindowMode == .floating
+                ? BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+                : unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
     }
 }
 
