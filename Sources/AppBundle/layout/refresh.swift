@@ -156,7 +156,7 @@ enum OptimalHideCorner {
 private func layoutWorkspaces() async throws {
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
-            workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
+            workspace.allLeafWindowsRecursive.forEach { $0.unhideFromCorner() }
             try await workspace.layoutWorkspace() // Unhide tiling windows from corner
         }
         return
@@ -190,13 +190,13 @@ private func layoutWorkspaces() async throws {
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {
         let workspace = monitor.activeWorkspace
-        workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
+        workspace.allLeafWindowsRecursive.forEach { $0.unhideFromCorner() }
         try await workspace.layoutWorkspace()
     }
     for workspace in Workspace.all where !workspace.isVisible {
         let corner = monitorToOptimalHideCorner[workspace.workspaceMonitor.rect.topLeftCorner] ?? .bottomRightCorner
         for window in workspace.allLeafWindowsRecursive {
-            try await (window as! MacWindow).hideInCorner(corner) // todo as!
+            try await window.hideInCorner(corner)
         }
     }
 }

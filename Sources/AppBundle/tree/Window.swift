@@ -8,6 +8,7 @@ open class Window: TreeNode, Hashable {
     var isFullscreen: Bool = false
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
+    var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
 
     @MainActor
     init(id: UInt32, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -34,7 +35,7 @@ open class Window: TreeNode, Hashable {
     var title: String { get async throws { die("Not implemented") } }
     var isMacosFullscreen: Bool { get async throws { false } }
     var isMacosMinimized: Bool { get async throws { false } } // todo replace with enum MacOsWindowNativeState { normal, fullscreen, invisible }
-    var isHiddenInCorner: Bool { die("Not implemented") }
+    var isHiddenInCorner: Bool { prevUnhiddenProportionalPositionInsideWorkspaceRect != nil }
     @MainActor
     func nativeFocus() { die("Not implemented") }
     func getAxRect() async throws -> Rect? { die("Not implemented") }

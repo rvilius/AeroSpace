@@ -3,7 +3,6 @@ import Common
 
 final class MacWindow: Window {
     let macApp: MacApp
-    private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
 
     @MainActor
     private init(_ id: UInt32, _ actor: MacApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -116,71 +115,6 @@ final class MacWindow: Window {
         macApp.closeAndUnregisterAxWindow(windowId)
     }
 
-    // todo it's part of the window layout and should be moved to layoutRecursive.swift
-    @MainActor
-    func hideInCorner(_ corner: OptimalHideCorner) async throws {
-        guard let nodeMonitor else { return }
-        // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent `hideInCorner` calls
-        if !isHiddenInCorner {
-            guard let windowRect = try await getAxRect() else { return }
-            // Check for isHiddenInCorner for the second time because of the suspension point above
-            if !isHiddenInCorner {
-                let topLeftCorner = windowRect.topLeftCorner
-                let monitorRect = windowRect.center.monitorApproximation.rect // Similar to layoutFloatingWindow. Non idempotent
-                let absolutePoint = topLeftCorner - monitorRect.topLeftCorner
-                prevUnhiddenProportionalPositionInsideWorkspaceRect =
-                    CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
-            }
-        }
-        let p: CGPoint
-        switch corner {
-            case .bottomLeftCorner:
-                guard let s = try await getAxSize() else { fallthrough }
-                // Zoom will jump off if you do one pixel offset https://github.com/nikitabobko/AeroSpace/issues/527
-                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
-                let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: -1)
-                p = nodeMonitor.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -s.width, y: 0)
-            case .bottomRightCorner:
-                // Zoom will jump off if you do one pixel offset https://github.com/nikitabobko/AeroSpace/issues/527
-                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
-                let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: 1)
-                p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
-        }
-        setAxFrame(p, nil)
-    }
-
-    @MainActor
-    func unhideFromCorner() {
-        guard let prevUnhiddenProportionalPositionInsideWorkspaceRect else { return }
-        guard let nodeWorkspace else { return } // hiding only makes sense for workspace windows
-        guard let parent else { return }
-
-        switch getChildParentRelation(child: self, parent: parent) {
-            // Just a small optimization to avoid unnecessary AX calls for non floating windows
-            // Tiling windows should be unhidden with layoutRecursive anyway
-            case .floatingWindow:
-                let workspaceRect = nodeWorkspace.workspaceMonitor.rect
-                var newX = workspaceRect.topLeftX + workspaceRect.width * prevUnhiddenProportionalPositionInsideWorkspaceRect.x
-                var newY = workspaceRect.topLeftY + workspaceRect.height * prevUnhiddenProportionalPositionInsideWorkspaceRect.y
-                // todo we probably should replace lastFloatingSize with proper floating window sizing
-                // https://github.com/nikitabobko/AeroSpace/issues/1519
-                let windowWidth = lastFloatingSize?.width ?? 0
-                let windowHeight = lastFloatingSize?.height ?? 0
-                newX = newX.coerce(in: workspaceRect.minX ... max(workspaceRect.minX, workspaceRect.maxX - windowWidth))
-                newY = newY.coerce(in: workspaceRect.minY ... max(workspaceRect.minY, workspaceRect.maxY - windowHeight))
-
-                setAxFrame(CGPoint(x: newX, y: newY), nil)
-            case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow, .macosNativeMinimizedWindow,
-                 .macosPopupWindow, .tiling, .rootTilingContainer, .shimContainerRelation: break
-        }
-
-        self.prevUnhiddenProportionalPositionInsideWorkspaceRect = nil
-    }
-
-    override var isHiddenInCorner: Bool {
-        prevUnhiddenProportionalPositionInsideWorkspaceRect != nil
-    }
-
     override func getAxSize() async throws -> CGSize? {
         try await macApp.getAxSize(windowId)
     }
@@ -198,6 +132,23 @@ final class MacWindow: Window {
     }
 }
 
+// Pure: recovers a floating window's absolute top-left from its previously-stored
+// proportional position inside the workspace rect, then clamps so the window's
+// (assumed) bounding box stays inside the workspace.
+func computeFloatingUnhideTopLeft(
+    workspaceRect: Rect,
+    proportion: CGPoint,
+    floatingSize: CGSize?,
+) -> CGPoint {
+    var newX = workspaceRect.topLeftX + workspaceRect.width * proportion.x
+    var newY = workspaceRect.topLeftY + workspaceRect.height * proportion.y
+    let windowWidth = floatingSize?.width ?? 0
+    let windowHeight = floatingSize?.height ?? 0
+    newX = newX.coerce(in: workspaceRect.minX ... max(workspaceRect.minX, workspaceRect.maxX - windowWidth))
+    newY = newY.coerce(in: workspaceRect.minY ... max(workspaceRect.minY, workspaceRect.maxY - windowHeight))
+    return CGPoint(x: newX, y: newY)
+}
+
 extension Window {
     @MainActor
     func relayoutWindow(on workspace: Workspace, forceTile: Bool = false) async throws {
@@ -205,6 +156,74 @@ extension Window {
             ? unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
             : try await unbindAndGetBindingDataForNewWindow(self.asMacWindow().windowId, self.asMacWindow().macApp, workspace, window: self)
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+    }
+
+    // todo it's part of the window layout and should be moved to layoutRecursive.swift
+    @MainActor
+    func hideInCorner(_ corner: OptimalHideCorner) async throws {
+        guard let nodeMonitor else { return }
+        // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent `hideInCorner` calls
+        if !isHiddenInCorner {
+            guard let windowRect = try await getAxRect() else { return }
+            // Check for isHiddenInCorner for the second time because of the suspension point above
+            if !isHiddenInCorner {
+                // Refresh lastFloatingSize from the actual AX rect so the clamp in
+                // unhideFromCorner uses the window's current width, not a stale value
+                // captured at registration or `layout floating`. Otherwise right-edge
+                // floating windows whose width was shrunk after binding (e.g. by an
+                // external snap-size helper) drift left on workspace switch.
+                // Gated to floating: for tiling windows, lastFloatingSize must remain
+                // the restore-on-refloat size, not the tiled rect.
+                if let parent, case .floatingWindow = getChildParentRelation(child: self, parent: parent) {
+                    lastFloatingSize = windowRect.size
+                }
+                let topLeftCorner = windowRect.topLeftCorner
+                let monitorRect = windowRect.center.monitorApproximation.rect // Similar to layoutFloatingWindow. Non idempotent
+                let absolutePoint = topLeftCorner - monitorRect.topLeftCorner
+                prevUnhiddenProportionalPositionInsideWorkspaceRect =
+                    CGPoint(x: absolutePoint.x / monitorRect.width, y: absolutePoint.y / monitorRect.height)
+            }
+        }
+        let p: CGPoint
+        switch corner {
+            case .bottomLeftCorner:
+                guard let s = try await getAxSize() else { fallthrough }
+                // Zoom will jump off if you do one pixel offset https://github.com/nikitabobko/AeroSpace/issues/527
+                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
+                let onePixelOffset = app.rawAppBundleId == KnownBundleId.zoom.rawValue ? .zero : CGPoint(x: 1, y: -1)
+                p = nodeMonitor.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -s.width, y: 0)
+            case .bottomRightCorner:
+                // Zoom will jump off if you do one pixel offset https://github.com/nikitabobko/AeroSpace/issues/527
+                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
+                let onePixelOffset = app.rawAppBundleId == KnownBundleId.zoom.rawValue ? .zero : CGPoint(x: 1, y: 1)
+                p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
+        }
+        setAxFrame(p, nil)
+    }
+
+    @MainActor
+    func unhideFromCorner() {
+        guard let prevUnhiddenProportionalPositionInsideWorkspaceRect else { return }
+        guard let nodeWorkspace else { return } // hiding only makes sense for workspace windows
+        guard let parent else { return }
+
+        switch getChildParentRelation(child: self, parent: parent) {
+            // Just a small optimization to avoid unnecessary AX calls for non floating windows
+            // Tiling windows should be unhidden with layoutRecursive anyway
+            case .floatingWindow:
+                // todo we probably should replace lastFloatingSize with proper floating window sizing
+                // https://github.com/nikitabobko/AeroSpace/issues/1519
+                let newTopLeft = computeFloatingUnhideTopLeft(
+                    workspaceRect: nodeWorkspace.workspaceMonitor.rect,
+                    proportion: prevUnhiddenProportionalPositionInsideWorkspaceRect,
+                    floatingSize: lastFloatingSize,
+                )
+                setAxFrame(newTopLeft, nil)
+            case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow, .macosNativeMinimizedWindow,
+                 .macosPopupWindow, .tiling, .rootTilingContainer, .shimContainerRelation: break
+        }
+
+        self.prevUnhiddenProportionalPositionInsideWorkspaceRect = nil
     }
 }
 
