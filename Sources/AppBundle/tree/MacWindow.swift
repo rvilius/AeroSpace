@@ -169,9 +169,9 @@ extension Window {
             if !isHiddenInCorner {
                 // Refresh lastFloatingSize from the actual AX rect so the clamp in
                 // unhideFromCorner uses the window's current width, not a stale value
-                // captured at registration or `layout floating`. Otherwise right-edge
-                // floating windows whose width was shrunk after binding (e.g. by an
-                // external snap-size helper) drift left on workspace switch.
+                // captured at registration or `layout floating`. Without this, any
+                // resize between bind and workspace switch leaves the clamp using the
+                // old width, so right-edge floating windows drift left on re-show.
                 // Gated to floating: for tiling windows, lastFloatingSize must remain
                 // the restore-on-refloat size, not the tiled rect.
                 if let parent, case .floatingWindow = getChildParentRelation(child: self, parent: parent) {

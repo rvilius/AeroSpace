@@ -12,18 +12,13 @@ up as a visible 1–3 frame flash on app launch — most obvious on Messages, bu
 present for any app. Apps that don't run NSWindow autosave fast enough used
 to stay stuck at maximized size until a manual resize.
 
-User's home machine setup (cloned in this repo at `~/.config/aerospace/`,
-managed by chezmoi):
-- `aerospace.toml` with catch-all `run = ['layout floating', 'exec-and-forget
-  snap-size']`
-- `snap-size` Swift binary, runs from on-window-detected, polls AX for ~500ms
-  and shrinks-on-sight
-- `aerospace-watchdog` daemon, polls every 250ms, force-floats new windows
-  and shrinks any window ≥0.9 ratio on both monitor axes
-- Log at `~/.config/aerospace/aerospace.log`
-
-The watchdog + snap-size approach **solved the stuck-window case** (windows
-get shrunk within one poll cycle) but **cannot eliminate the flash** because:
+**Previous workaround (now removed, kept here for history):** before this
+fork existed, the user ran a `snap-size` Swift binary from
+`on-window-detected` (polled AX for ~500ms and shrunk windows on sight) plus
+an `aerospace-watchdog` LaunchAgent (polled every 250ms, force-floated new
+windows, shrunk any window ≥0.9 ratio on both monitor axes). That combo
+**solved the stuck-window case** (windows got shrunk within one poll cycle)
+but **could not eliminate the flash** because:
 - snap-size's binary launch + Swift runtime warmup is ~50–100ms, by which
   time aerospace has already issued the AX tile-maximize and iMessage has
   already self-restored
@@ -32,6 +27,9 @@ get shrunk within one poll cycle) but **cannot eliminate the flash** because:
 - Even instant reaction wouldn't help: the tile-maximize is set as the
   window's AX frame, macOS renders the next compositor pass at that size,
   and only then do we see the size and shrink it back
+
+The `default-window-mode = 'floating'` patch below removes the tile-maximize
+at the source, so snap-size and aerospace-watchdog are no longer installed.
 
 ## Why the in-code architecture *looks* like it shouldn't flash
 
@@ -170,11 +168,12 @@ committing changes to this repo, restore with
 
 User's chezmoi repo: `~/.local/share/chezmoi/`
 - `dot_aerospace.toml.tmpl` — the aerospace config
-- `dot_config/aerospace/` — watchdog/snap-size/snap-edges Swift sources
-- `run_onchange_build-aerospace-tools.sh.tmpl` — rebuilds + reloads on
-  source change. Same pattern could wrap aerospace fork build/install.
-- Commit `114b66a` (today): faster watchdog + snap-size polling loop, the
-  best we could do without forking
+- `dot_config/aerospace/` — wallpaper-daemon Swift source (the only helper
+  still in use; see "Secondary patch" below). The earlier
+  watchdog/snap-size/snap-edges helpers were retired once the
+  `default-window-mode = 'floating'` patch landed and the right-edge drift
+  fix in `MacWindow.hideInCorner` shipped.
+- `run_after_build-aerospace-fork.sh.tmpl` — builds and installs this fork.
 
 ## Secondary patch: wallpaper-daemon notification
 
