@@ -57,7 +57,17 @@ func exitMacOsNativeUnconventionalState(window: Window, prevParentKind: NonLeafT
         case .workspace:
             window.bindAsFloatingWindow(to: workspace)
         case .tilingContainer:
-            try await window.relayoutWindow(on: workspace, forceTile: true)
+            // Same gate as closedWindowsCache: when default-window-mode =
+            // 'floating', a window exiting native fullscreen/minimize/hide
+            // that was previously tiled must not be force-tiled back —
+            // forceTile=true bypasses unbindAndGetBindingDataForNewWindow's
+            // floating reroute and the next layoutWorkspaces pass would
+            // re-maximize the window.
+            if config.defaultWindowMode == .floating {
+                window.bindAsFloatingWindow(to: workspace)
+            } else {
+                try await window.relayoutWindow(on: workspace, forceTile: true)
+            }
         case .macosPopupWindowsContainer: // Since the window was minimized/fullscreened it was mistakenly detected as popup. Relayout the window
             try await window.relayoutWindow(on: workspace)
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer: // wtf case, should never be possible. But If encounter it, let's just re-layout window

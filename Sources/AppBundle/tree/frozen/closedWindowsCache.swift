@@ -71,9 +71,25 @@ struct FrozenWorkspace: Sendable {
         let prevRoot = workspace.rootTilingContainer // Save prevRoot into a variable to avoid it being garbage collected earlier than needed
         let potentialOrphans = prevRoot.allLeafWindowsRecursive
         prevRoot.unbindFromParent()
-        restoreTreeRecursive(frozenContainer: frozenWorkspace.rootTilingNode, parent: workspace, index: INDEX_BIND_LAST)
-        for window in (potentialOrphans - workspace.rootTilingContainer.allLeafWindowsRecursive) {
-            try await window.relayoutWindow(on: workspace, forceTile: true)
+        // When default-window-mode = 'floating', restoring the frozen tiling
+        // tree as-is rebinds windows under a fresh TilingContainer, bypassing
+        // the floating reroute in unbindAndGetBindingDataForNewWindow. Every
+        // layoutWorkspaces pass then re-maximizes them — observed as Slack
+        // opening at workspace-fill on relaunch when a prior tile-bound state
+        // was cached. Flatten the frozen tiling tree into workspace-bound
+        // floating windows and route orphans the same way.
+        if config.defaultWindowMode == .floating {
+            for windowId in collectFrozenWindowIds(frozenWorkspace.rootTilingNode) {
+                MacWindow.get(byId: windowId)?.bindAsFloatingWindow(to: workspace)
+            }
+            for window in potentialOrphans {
+                window.bindAsFloatingWindow(to: workspace)
+            }
+        } else {
+            restoreTreeRecursive(frozenContainer: frozenWorkspace.rootTilingNode, parent: workspace, index: INDEX_BIND_LAST)
+            for window in (potentialOrphans - workspace.rootTilingContainer.allLeafWindowsRecursive) {
+                try await window.relayoutWindow(on: workspace, forceTile: true)
+            }
         }
     }
 
@@ -83,6 +99,18 @@ struct FrozenWorkspace: Sendable {
             .setActiveWorkspace(Workspace.get(byName: monitor.visibleWorkspace))
     }
     return true
+}
+
+@MainActor
+private func collectFrozenWindowIds(_ container: FrozenContainer) -> [UInt32] {
+    var ids: [UInt32] = []
+    for child in container.children {
+        switch child {
+            case .window(let w): ids.append(w.id)
+            case .container(let c): ids.append(contentsOf: collectFrozenWindowIds(c))
+        }
+    }
+    return ids
 }
 
 @discardableResult
