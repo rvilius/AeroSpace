@@ -18,23 +18,59 @@ final class MacWindow: Window {
     static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId)
-        let data = try await unbindAndGetBindingDataForNewWindow(
-            windowId,
-            macApp,
-            isStartup
-                ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
-                : focus.workspace,
-            window: nil,
-        )
+        let bornWorkspace = isStartup
+            ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
+            : focus.workspace
+        // Captured for the keep-new-window-on-active-workspace rescue below,
+        // before any binding so they describe the state the new window is
+        // born into: the workspace focused just before the activation jump,
+        // whether that jump was recent, and whether the app already had a
+        // window on bornWorkspace (the macOS window-grouping signature).
+        let prevWs = prevFocusedWorkspace
+        let prevWsRecent = prevFocusedWorkspaceDate.distance(to: .now) < 0.5
+        let appHadSiblingOnBornWorkspace = allWindows.contains {
+            $0.windowId != windowId && $0.macApp === macApp && $0.nodeWorkspace == bornWorkspace
+        }
+        let data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, bornWorkspace, window: nil)
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
 
+        // Whether the user has an explicit on-window-detected rule for this
+        // window. Evaluated before the callbacks run (and before they can move
+        // the window) so a rule that routes to bornWorkspace is still detected.
+        // A matching rule means the user controls this app's placement, so the
+        // rescue stays out of the way (e.g. the Safari "Open Profile" hotkeys).
+        var hasMatchingDetectRule = false
+        for callback in config.onWindowDetected where try await callback.matches(window) {
+            hasMatchingDetectRule = true
+            break
+        }
+
         try await debugWindowsIfRecording(window)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
             try await tryOnWindowDetected(window)
+        }
+
+        // keep-new-window-on-active-workspace: opening a new window forces the
+        // app to activate, which makes macOS raise an existing window of that
+        // app on another workspace and pulls AeroSpace focus there — the new
+        // window is then born on that workspace, not the one the user was on.
+        // When all the grouping conditions hold and no rule claimed the window,
+        // rebind it back to the previously focused workspace and follow it.
+        if config.keepNewWindowOnActiveWorkspace,
+           !isStartup,
+           !hasMatchingDetectRule,
+           appHadSiblingOnBornWorkspace,
+           prevWsRecent,
+           let prevWs,
+           prevWs != bornWorkspace
+        {
+            let target: NonLeafTreeNodeObject = window.isFloating ? prevWs : prevWs.rootTilingContainer
+            window.bind(to: target, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+            _ = window.focusWindow()
         }
         return window
     }
