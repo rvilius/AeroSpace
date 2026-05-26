@@ -112,6 +112,18 @@ extension Workspace {
 @MainActor var prevFocusedWorkspaceDate: Date = .distantPast
 @MainActor var prevFocusedWorkspace: Workspace? { _prevFocusedWorkspaceName.map { Workspace.get(byName: $0) } }
 
+// keep-new-window-on-active-workspace: the most recently opened (non-startup)
+// window. Used by updateFocusCache to briefly hold focus on it against same-app
+// cross-workspace focus steals (e.g. VS Code raising an older window ~1-2s after
+// a new one is opened).
+@MainActor var recentlyOpenedWindow: RecentlyOpenedWindow? = nil
+struct RecentlyOpenedWindow {
+    let windowId: UInt32
+    let workspaceName: String
+    let appPid: Int32
+    let date: Date
+}
+
 // Used by focus-back-and-forth
 @MainActor private var _prevFocus: FrozenFocus? = nil
 @MainActor var prevFocus: LiveFocus? { _prevFocus?.live.takeIf { $0 != focus } }

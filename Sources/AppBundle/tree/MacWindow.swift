@@ -27,7 +27,7 @@ final class MacWindow: Window {
         // whether that jump was recent, and whether the app already had a
         // window on bornWorkspace (the macOS window-grouping signature).
         let prevWs = prevFocusedWorkspace
-        let prevWsRecent = prevFocusedWorkspaceDate.distance(to: .now) < 0.5
+        let prevWsRecent = prevFocusedWorkspaceDate.distance(to: .now) < 1.0
         let appHadSiblingOnBornWorkspace = allWindows.contains {
             $0.windowId != windowId && $0.macApp === macApp && $0.nodeWorkspace == bornWorkspace
         }
@@ -71,6 +71,12 @@ final class MacWindow: Window {
             let target: NonLeafTreeNodeObject = window.isFloating ? prevWs : prevWs.rootTilingContainer
             window.bind(to: target, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
             _ = window.focusWindow()
+        }
+
+        // Record the new window (on its final workspace) so updateFocusCache can
+        // hold focus on it against a same-app cross-workspace steal for ~2s.
+        if config.keepNewWindowOnActiveWorkspace, !isStartup, let ws = window.nodeWorkspace {
+            recentlyOpenedWindow = RecentlyOpenedWindow(windowId: windowId, workspaceName: ws.name, appPid: macApp.pid, date: .now)
         }
         return window
     }
