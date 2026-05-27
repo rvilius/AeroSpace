@@ -41,6 +41,8 @@ import Foundation
             smartLayoutAtStartup()
             _ = try await config.afterStartupCommand.runCmdSeq(.defaultEnv, .emptyStdin)
         }
+        // Start after startup automation so it isn't counted as active time.
+        WorkspaceTimeTracker.shared.start()
     }
 }
 

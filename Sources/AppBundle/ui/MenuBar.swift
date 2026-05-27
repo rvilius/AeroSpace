@@ -20,7 +20,7 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
                     }
                 } label: {
                     Toggle(isOn: .constant(workspace.isFocused)) {
-                        Text(workspace.name + workspace.suffix).font(.system(.body, design: .monospaced))
+                        WorkspaceMenuRowLabel(workspace: workspace)
                     }
                 }
             }
@@ -112,4 +112,18 @@ func getTextEditorToOpenConfig() -> URL {
     NSWorkspace.shared.urlForApplication(toOpen: findCustomConfigUrl().urlOrNil ?? defaultConfigUrl)?
         .takeIf { $0.lastPathComponent != "Xcode.app" } // Blacklist Xcode. It is too heavy to open plain text files
         ?? URL(filePath: "/System/Applications/TextEdit.app")
+}
+
+/// Dropdown row label that observes the time tracker so today's per-workspace
+/// duration is appended to the right of the name. The `@ObservedObject` here is
+/// what creates the live subscription — a bare `WorkspaceTimeTracker.shared`
+/// call inside the inline closure would not subscribe.
+struct WorkspaceMenuRowLabel: View {
+    @ObservedObject private var tracker = WorkspaceTimeTracker.shared
+    let workspace: WorkspaceViewModel
+    var body: some View {
+        let dur = tracker.formatted(workspace.name)
+        Text(workspace.name + workspace.suffix + (dur.isEmpty ? "" : "  ·  " + dur))
+            .font(.system(.body, design: .monospaced))
+    }
 }
