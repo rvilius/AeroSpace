@@ -43,6 +43,11 @@ struct Config: ConvenienceCopyable {
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
     var defaultWindowMode: DefaultWindowMode = .tiling
     var keepNewWindowOnActiveWorkspace: Bool = false
+    // Bundle IDs whose cross-workspace focus changes are followed instead of
+    // snapped back by the keep-new-window-on-active-workspace steal guard.
+    // For apps you deliberately jump to via a non-AeroSpace global hotkey
+    // (e.g. Safari profile windows routed by on-window-detected rules).
+    var focusStealAllowApps: [String] = []
     var startAtLogin: Bool = false
     var autoReloadConfig: Bool = false
     var automaticallyUnhideMacosHiddenApps: Bool = false

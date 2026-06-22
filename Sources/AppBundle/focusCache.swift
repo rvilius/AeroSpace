@@ -35,8 +35,46 @@ import Foundation
             lastKnownNativeFocusedWindowId = r.windowId
             return
         }
+
+        // Cross-workspace focus-steal guard (sibling of the new-window guard
+        // above, but no new window is involved). Pull focus back to where the
+        // user actually is instead of following the steal.
+        if let home = crossWorkspaceStealHoldTarget(nativeFocused) {
+            _ = home.focusWindow()
+            home.nativeFocus()
+            lastKnownNativeFocusedWindowId = home.windowId
+            return
+        }
         _ = nativeFocused?.focusWindow()
         lastKnownNativeFocusedWindowId = nativeFocused?.windowId
     }
     nativeFocused?.macAppUnsafe.lastNativeFocusedWindowId = nativeFocused?.windowId
+}
+
+/// If `nativeFocused` is a focus steal to a *hidden* workspace — an app
+/// activating one of its background windows on a workspace that isn't currently
+/// displayed, dragging the user's visible monitor over to it — returns the
+/// window focus should be held on instead. nil if it isn't such a steal.
+///
+/// Covers any app that raises a background window (VS Code / Electron, Spark,
+/// Finder, Teams, …). Anchored on the user's current logical `focus`, which
+/// still points at the user's real window here because AeroSpace's own
+/// ctrl-1..5 navigation moves logical focus first via its command — so this
+/// never fights deliberate workspace switches. Gated on the stolen workspace
+/// being hidden (`!isVisible`), so focusing a window on an already-visible
+/// workspace — e.g. clicking a window on the second monitor — is followed
+/// normally; only steals that would yank the visible monitor are suppressed.
+@MainActor func crossWorkspaceStealHoldTarget(_ nativeFocused: Window?) -> Window? {
+    let f = focus
+    guard config.keepNewWindowOnActiveWorkspace,
+          let stolen = nativeFocused,
+          let home = f.windowOrNil,
+          stolen.windowId != home.windowId,
+          let stolenWs = stolen.nodeWorkspace,
+          stolenWs.name != f.workspace.name,
+          !stolenWs.isVisible,
+          home.nodeWorkspace?.name == f.workspace.name,
+          !config.focusStealAllowApps.contains(stolen.app.rawAppBundleId ?? "")
+    else { return nil }
+    return home
 }

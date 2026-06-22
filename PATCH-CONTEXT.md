@@ -83,6 +83,46 @@ Files touched:
 Patch is ~30 lines + comments. Designed to be upstream-able as a feature
 flag — keeps existing tiling users on the default path.
 
+## Focus-steal guards (`keep-new-window-on-active-workspace`)
+
+Separate from `default-window-mode`. AeroSpace follows the macOS frontmost
+window: on `NSWorkspace.didActivateApplicationNotification` it re-syncs the
+visible workspace to whatever app just became frontmost (`GlobalObserver` →
+`updateFocusCache`). Background apps that self-activate a window on another
+workspace therefore yank the user off their current workspace. The
+`keep-new-window-on-active-workspace = true` flag suppresses two variants of
+this steal; both live in `Sources/AppBundle/focusCache.swift` and snap focus
+back to where the user actually is.
+
+- **New-window variant** (inline in `updateFocusCache`, anchored on
+  `recentlyOpenedWindow`): opening a new window forces the app to activate,
+  raising an older window of its own on another workspace. Guarded for ~2s
+  after a new window opens. Skipped for apps with a matching
+  `on-window-detected` rule (the user controls those).
+- **Cross-workspace variant** (`crossWorkspaceStealHoldTarget`, anchored on the
+  current logical `focus`): any app raises a background window with no new
+  window involved — VS Code / Electron background Claude Code sessions, Spark,
+  Finder, Teams, etc. No recency window; fires whenever a cross-workspace steal
+  lands on a **hidden** workspace (`!stolenWs.isVisible`) while logical focus is
+  still on the user's workspace.
+
+The new-window variant is restricted to same-app steals; the cross-workspace
+variant is any-app but gated on the stolen workspace being hidden, so focusing
+a window on an already-visible workspace (e.g. clicking a window on the second
+monitor) is followed normally — only steals that would yank the visible monitor
+are suppressed. Safety property for both: AeroSpace's own `workspace` commands
+(ctrl-1..5) move logical `focus` first, so the guards never fight deliberate
+navigation. Trade-off: an *external* cross-workspace focus change to a hidden
+workspace that AeroSpace didn't initiate (e.g. a non-AeroSpace global hotkey
+that raises a window on another workspace, or cross-workspace Cmd-Tab) is also
+snapped back — use ctrl-1..5 to switch workspaces. The
+`focus-steal-allow-apps` config (a list of bundle IDs, default empty) opts
+specific apps out of the snap-back so they follow normally — e.g.
+`['com.apple.Safari']` keeps the Safari profile hotkeys working while Spark /
+Finder / Teams / VS Code background sessions still snap back. Config field:
+`Config.swift` (`focusStealAllowApps`) + `parseConfig.swift`. Tests:
+`Sources/AppBundleTests/tree/FocusStealGuardTest.swift`.
+
 ## How to use it
 
 The chezmoi dotfiles repo (`rvilius/dotfiles`) automates the full

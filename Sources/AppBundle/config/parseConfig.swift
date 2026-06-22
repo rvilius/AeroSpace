@@ -111,6 +111,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "default-root-container-orientation": Parser(\.defaultRootContainerOrientation, parseDefaultContainerOrientation),
     "default-window-mode": Parser(\.defaultWindowMode, parseDefaultWindowMode),
     "keep-new-window-on-active-workspace": Parser(\.keepNewWindowOnActiveWorkspace, parseBool),
+    "focus-steal-allow-apps": Parser(\.focusStealAllowApps, parseArrayOfStrings),
 
     "start-at-login": Parser(\.startAtLogin, parseBool),
     "auto-reload-config": Parser(\.autoReloadConfig, parseBool),
