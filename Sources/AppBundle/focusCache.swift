@@ -37,12 +37,24 @@ import Foundation
         }
 
         // Cross-workspace focus-steal guard (sibling of the new-window guard
-        // above, but no new window is involved). Pull focus back to where the
-        // user actually is instead of following the steal.
-        if let home = crossWorkspaceStealHoldTarget(nativeFocused) {
-            _ = home.focusWindow()
-            home.nativeFocus()
-            lastKnownNativeFocusedWindowId = home.windowId
+        // above, but no new window is involved). Don't follow the steal.
+        if isCrossWorkspaceStealToHiddenWorkspace(nativeFocused) {
+            if let home = focus.windowOrNil {
+                // Pull focus back onto the window the user was actually on.
+                _ = home.focusWindow()
+                home.nativeFocus()
+                lastKnownNativeFocusedWindowId = home.windowId
+            } else {
+                // The focused workspace has no window to refocus. Re-assert it
+                // anyway so the steal is *not* followed: following it would drag
+                // the stolen window's monitor — and, cascading, the whole
+                // context — onto the hidden workspace. (The empty-workspace bug:
+                // opening a new window scoped to an empty workspace yanked the
+                // desktop to the app's other workspace's context.) The imminent
+                // new window is born here (bornWorkspace = focus.workspace).
+                _ = focus.workspace.focusWorkspace()
+                lastKnownNativeFocusedWindowId = nil
+            }
             return
         }
         _ = nativeFocused?.focusWindow()
@@ -51,30 +63,41 @@ import Foundation
     nativeFocused?.macAppUnsafe.lastNativeFocusedWindowId = nativeFocused?.windowId
 }
 
-/// If `nativeFocused` is a focus steal to a *hidden* workspace — an app
+/// Whether `nativeFocused` is a focus steal to a *hidden* workspace — an app
 /// activating one of its background windows on a workspace that isn't currently
-/// displayed, dragging the user's visible monitor over to it — returns the
-/// window focus should be held on instead. nil if it isn't such a steal.
+/// displayed, dragging the user's visible monitor over to it. updateFocusCache
+/// uses this to *not* follow such a steal.
 ///
 /// Covers any app that raises a background window (VS Code / Electron, Spark,
 /// Finder, Teams, …). Anchored on the user's current logical `focus`, which
-/// still points at the user's real window here because AeroSpace's own
+/// still points at the user's real workspace here because AeroSpace's own
 /// ctrl-1..5 navigation moves logical focus first via its command — so this
 /// never fights deliberate workspace switches. Gated on the stolen workspace
 /// being hidden (`!isVisible`), so focusing a window on an already-visible
 /// workspace — e.g. clicking a window on the second monitor — is followed
-/// normally; only steals that would yank the visible monitor are suppressed.
-@MainActor func crossWorkspaceStealHoldTarget(_ nativeFocused: Window?) -> Window? {
+/// normally; only steals that would yank a hidden workspace into view are
+/// suppressed.
+///
+/// Deliberately does NOT require the focused workspace to hold a window: an
+/// empty focused workspace must still suppress the steal, not follow it.
+/// Otherwise opening a new window scoped to an empty workspace (e.g. a fresh
+/// Hotrema) drags the desktop onto the app's other workspace's context.
+@MainActor func isCrossWorkspaceStealToHiddenWorkspace(_ nativeFocused: Window?) -> Bool {
     let f = focus
     guard config.keepNewWindowOnActiveWorkspace,
           let stolen = nativeFocused,
-          let home = f.windowOrNil,
-          stolen.windowId != home.windowId,
+          stolen.windowId != f.windowOrNil?.windowId,
           let stolenWs = stolen.nodeWorkspace,
           stolenWs.name != f.workspace.name,
           !stolenWs.isVisible,
-          home.nodeWorkspace?.name == f.workspace.name,
           !config.focusStealAllowApps.contains(stolen.app.rawAppBundleId ?? "")
-    else { return nil }
-    return home
+    else { return false }
+    return true
+}
+
+/// The window focus should be held on for a detected steal, or nil when it
+/// isn't a steal *or* the focused workspace is empty (no window to hold). Kept
+/// for callers/tests that want the hold target directly.
+@MainActor func crossWorkspaceStealHoldTarget(_ nativeFocused: Window?) -> Window? {
+    isCrossWorkspaceStealToHiddenWorkspace(nativeFocused) ? focus.windowOrNil : nil
 }

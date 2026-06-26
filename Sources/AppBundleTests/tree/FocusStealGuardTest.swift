@@ -29,6 +29,23 @@ final class FocusStealGuardTest: XCTestCase {
                       "a steal to a hidden workspace must hold focus on the active window")
     }
 
+    func test_stealToHiddenWorkspace_fromEmptyFocusedWorkspace_isStillASteal() async throws {
+        config.keepNewWindowOnActiveWorkspace = true
+        // setUp leaves the focused workspace empty — no home window to hold.
+        XCTAssertNil(focus.windowOrNil, "precondition: focused workspace must be empty")
+
+        let other = Workspace.get(byName: "other")
+        let stealer = TestWindow.new(id: 2, parent: other.rootTilingContainer)
+
+        // The empty-workspace bug: with no home window the old guard bailed and
+        // updateFocusCache *followed* the steal, dragging the desktop to the
+        // stolen window's context. Detection must not depend on a home window.
+        XCTAssertTrue(isCrossWorkspaceStealToHiddenWorkspace(stealer),
+                      "a steal to a hidden workspace must be detected even when the focused workspace is empty")
+        XCTAssertNil(crossWorkspaceStealHoldTarget(stealer),
+                     "an empty focused workspace has no window to hold, but it is still a steal")
+    }
+
     func test_allowListedApp_isFollowed() async throws {
         config.keepNewWindowOnActiveWorkspace = true
         config.focusStealAllowApps = [TestApp.shared.rawAppBundleId ?? ""]
