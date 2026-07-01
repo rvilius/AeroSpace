@@ -13,6 +13,61 @@ final class FocusStealGuardTest: XCTestCase {
         setUpWorkspacesForTests()
         resetClosedWindowsCache()
         recentlyOpenedWindow = nil // isolate from the new-window guard
+        lastUserInputDate = nil // isolate from the deliberate-activation gate
+    }
+
+    func test_recentUserGesture_followsDeliberateActivation() async throws {
+        config.keepNewWindowOnActiveWorkspace = true
+        let home = focus.workspace
+        let homeWin = TestWindow.new(id: 1, parent: home.rootTilingContainer)
+        _ = homeWin.focusWindow()
+        let other = Workspace.get(byName: "other")
+        let stealer = TestWindow.new(id: 2, parent: other.rootTilingContainer)
+
+        // No recent gesture -> background steal, suppressed.
+        XCTAssertTrue(isCrossWorkspaceStealToHiddenWorkspace(stealer),
+                      "with no recent user gesture a cross-workspace focus change is a steal")
+
+        // A physical gesture just happened -> deliberate activation (Dock click,
+        // Cmd-Tab, Spotlight), followed.
+        lastUserInputDate = .now
+        XCTAssertFalse(isCrossWorkspaceStealToHiddenWorkspace(stealer),
+                       "a cross-workspace focus change right after a user gesture is a deliberate activation")
+
+        // A stale gesture must not keep classifying focus changes as deliberate.
+        lastUserInputDate = Date.now.addingTimeInterval(-5)
+        XCTAssertTrue(isCrossWorkspaceStealToHiddenWorkspace(stealer),
+                      "a stale user gesture must not keep following steals")
+    }
+
+    func test_recentGesture_onEmptyFocusedWorkspace_isStillASteal() async throws {
+        config.keepNewWindowOnActiveWorkspace = true
+        // setUp leaves the focused workspace empty. This is ab88df1's launch case:
+        // opening a new window scoped to an empty workspace is itself a gesture,
+        // so a fresh timestamp must NOT make the guard follow the raise.
+        XCTAssertNil(focus.windowOrNil, "precondition: focused workspace must be empty")
+        let other = Workspace.get(byName: "other")
+        let stealer = TestWindow.new(id: 2, parent: other.rootTilingContainer)
+
+        lastUserInputDate = .now
+        XCTAssertTrue(isCrossWorkspaceStealToHiddenWorkspace(stealer),
+                      "a fresh gesture on an empty focused workspace must not follow (ab88df1 regression)")
+    }
+
+    func test_recentGesture_duringNewWindowLaunch_isStillASteal() async throws {
+        config.keepNewWindowOnActiveWorkspace = true
+        let home = focus.workspace
+        let homeWin = TestWindow.new(id: 1, parent: home.rootTilingContainer)
+        _ = homeWin.focusWindow()
+        let other = Workspace.get(byName: "other")
+        let stealer = TestWindow.new(id: 2, parent: other.rootTilingContainer)
+
+        // A new window just opened (a launch is a gesture): even with a fresh
+        // timestamp, the app's background raise must stay suppressed.
+        lastUserInputDate = .now
+        recentlyOpenedWindow = RecentlyOpenedWindow(windowId: 1, workspaceName: home.name, appPid: 999, date: .now)
+        XCTAssertTrue(isCrossWorkspaceStealToHiddenWorkspace(stealer),
+                      "a fresh gesture during an in-flight new-window launch must not follow the raise")
     }
 
     func test_stealToHiddenWorkspace_holdsActiveWindow() async throws {

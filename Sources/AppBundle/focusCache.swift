@@ -2,6 +2,12 @@ import Foundation
 
 @MainActor private var lastKnownNativeFocusedWindowId: UInt32? = nil
 
+/// Timestamp of the last physical user gesture (mouse click / keypress),
+/// recorded synchronously by GlobalObserver. Used to tell a deliberate app
+/// activation (Dock click, Cmd-Tab, Spotlight) from an app's background focus
+/// steal: a deliberate activation closely trails a gesture, a steal does not.
+@MainActor var lastUserInputDate: Date? = nil
+
 /// The data should flow (from nativeFocused to focused) and
 ///                      (from nativeFocused to lastKnownNativeFocusedWindowId)
 /// Alternative names: takeFocusFromMacOs, syncFocusFromMacOs
@@ -92,6 +98,29 @@ import Foundation
           !stolenWs.isVisible,
           !config.focusStealAllowApps.contains(stolen.app.rawAppBundleId ?? "")
     else { return false }
+
+    // A cross-workspace focus change that closely trails a physical user
+    // gesture is a deliberate activation of an already-open app (Dock click,
+    // Cmd-Tab, Spotlight) — follow it, don't treat it as a steal. Three-part
+    // gate so this never re-opens the steals the guard exists to stop:
+    //   1. a gesture just happened;
+    //   2. the focused workspace has a real window — an empty focused workspace
+    //      is ab88df1's launch-steal case (imminent new window born on it), so
+    //      the gate must not fire there;
+    //   3. no new-window/launch is in flight — a launch is itself a gesture, and
+    //      its background raise must stay suppressed (covers ab88df1 and the VS
+    //      Code new-window steal even if the raise beats window registration).
+    // ponytail: temporal correlation, not causality — a real background steal
+    //   within 0.5s of unrelated input on the current workspace still gets
+    //   followed. Gates 2–3 kill the worst cases; the short window keeps the
+    //   rest rare. 0.5 is the tunable knob.
+    if let input = lastUserInputDate,
+       input.distance(to: .now) < 0.5,
+       f.windowOrNil != nil,
+       recentlyOpenedWindow.map({ $0.date.distance(to: .now) >= 2.0 }) ?? true
+    {
+        return false
+    }
     return true
 }
 

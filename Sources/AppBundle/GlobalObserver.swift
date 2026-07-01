@@ -53,7 +53,25 @@ enum GlobalObserver {
         nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
 
+        // Record physical user gestures for the deliberate-activation gate in
+        // updateFocusCache (see focusCache.swift / lastUserInputDate). Written
+        // synchronously — the monitor callback runs on the main thread (AppKit
+        // event-monitor contract), so this beats any later didActivate-triggered
+        // refresh that reads it.
+        //
+        // Keyboard is gated on Cmd held: that captures the native app-switch
+        // gestures (Cmd-Tab, Cmd-`) while ignoring ordinary typing. Recording on
+        // *every* keystroke would keep the 0.5s gate perpetually open during
+        // typing and let real background steals through — the exact bug the guard
+        // exists to stop.
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            if event.modifierFlags.contains(.command) {
+                MainActor.assumeIsolated { lastUserInputDate = .now }
+            }
+        }
+
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
+            MainActor.assumeIsolated { lastUserInputDate = .now }
             // todo reduce number of refreshSession in the callback
             //  resetManipulatedWithMouseIfPossible might call its own refreshSession
             //  The end of the callback calls refreshSession
