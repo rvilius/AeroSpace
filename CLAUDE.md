@@ -4,14 +4,18 @@ Fork of [nikitabobko/AeroSpace](https://github.com/nikitabobko/AeroSpace), an i3
 
 ## Why this fork exists
 
-Adds `default-window-mode = 'tiling' | 'floating'` config option. When `'floating'`, new windows bind directly to the workspace instead of the tiling tree — avoids the tile-maximize flash on app launch for users who run AeroSpace as a pure workspace-switcher.
+Two added config options:
+
+1. `default-window-mode = 'tiling' | 'floating'`. When `'floating'`, new windows bind directly to the workspace instead of the tiling tree — avoids the tile-maximize flash on app launch for users who run AeroSpace as a pure workspace-switcher.
+2. `workspace-groups = [['A', 'A-2'], ...]`. Ties workspaces together across monitors: focusing any group member also makes its peers active on their own monitors (visibility only, focus stays put), so multi-monitor screens stay in sync. Peers must be force-assigned to distinct monitors.
 
 Full context (root cause, alternatives tried, install order with chezmoi, open questions): see [`PATCH-CONTEXT.md`](./PATCH-CONTEXT.md). **Read this before touching the patch.**
 
-Patch touches three files:
-- `Sources/AppBundle/config/Config.swift` — `DefaultWindowMode` enum + field
-- `Sources/AppBundle/config/parseConfig.swift` — parser registration
-- `Sources/AppBundle/tree/MacWindow.swift` — `unbindAndGetBindingDataForNewWindow`
+Patch touches:
+- `Sources/AppBundle/config/Config.swift` — `DefaultWindowMode` enum + field; `workspaceGroups` field
+- `Sources/AppBundle/config/parseConfig.swift` — parser registration for both options
+- `Sources/AppBundle/tree/MacWindow.swift` — `unbindAndGetBindingDataForNewWindow` (default-window-mode)
+- `Sources/AppBundle/focus.swift` — `activateWorkspaceGroupPeers`, called from `setFocus` (workspace-groups)
 
 ## Build / test / lint
 

@@ -64,6 +64,10 @@ struct Config: ConvenienceCopyable {
 
     var gaps: Gaps = .zero
     var workspaceToMonitorForceAssignment: [String: [MonitorDescription]] = [:]
+    // Fork-only: groups of workspaces switched together across monitors. Focusing any member
+    // makes every peer active on its own monitor (visibility only, focus stays put). Peers must
+    // be force-assigned to distinct monitors. See `activateWorkspaceGroupPeers` in focus.swift.
+    var workspaceGroups: [[String]] = []
     var modes: [String: Mode] = [:]
     var onWindowDetected: [WindowDetectedCallback] = []
     var onModeChanged: [any Command] = []

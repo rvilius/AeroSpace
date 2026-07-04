@@ -667,6 +667,32 @@ The first matching pattern will be used
 
 xref:commands.adoc#move-workspace-to-monitor[move-workspace-to-monitor] command has no effect for workspaces that have monitor assignment
 
+[#workspace-groups]
+=== Switch grouped workspaces together (fork-only)
+
+NOTE: `workspace-groups` is a personal-fork option, not present in upstream AeroSpace.
+
+By default each monitor tracks its active workspace independently: switching to a workspace
+only changes the monitor that workspace belongs to. `workspace-groups` ties workspaces together
+so that focusing any member also makes its peers active on their own monitors — the screens stay
+in sync. Keyboard focus stays on the window you actually landed on.
+
+[source,toml]
+----
+workspace-groups = [
+    ['Hotrema', 'Hotrema-2'],
+    ['Ismpro',  'Ismpro-2'],
+]
+----
+
+Each group is a list of workspace names. A group can hold more than two members (for setups
+spanning 3+ monitors). Peers must be pinned to distinct monitors via
+`workspace-to-monitor-force-assignment` — that is what makes each peer land on the right screen.
+
+The switch is symmetric (triggering any member switches the whole group) and always wins: a
+peer monitor is re-synced to its group workspace even if you had manually switched it to
+something else.
+
 == Dialog heuristics
 
 * Apple provides accessibility API for apps to let others know which of their windows are dialogs

@@ -37,6 +37,25 @@ final class ConfigTest: XCTestCase {
         assertEquals(errors, ["exec-on-workspace-change[1]: Expected type is \'string\'. But actual type is \'int\'"])
     }
 
+    func testParseWorkspaceGroups() {
+        let (config, errors) = parseConfig(
+            """
+            workspace-groups = [['Hotrema', 'Hotrema-2'], ['Ismpro', 'Ismpro-2']]
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(config.workspaceGroups, [["Hotrema", "Hotrema-2"], ["Ismpro", "Ismpro-2"]])
+    }
+
+    func testParseWorkspaceGroupsElementTypeError() {
+        let (_, errors) = parseConfig(
+            """
+            workspace-groups = [['a', 1]]
+            """,
+        )
+        assertEquals(errors, ["workspace-groups[0][1]: Expected type is \'string\'. But actual type is \'int\'"])
+    }
+
     func testDuplicatedPersistentWorkspaces() {
         let (_, errors) = parseConfig(
             """

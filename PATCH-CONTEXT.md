@@ -241,3 +241,41 @@ Why a notification + external daemon rather than a config option
 If upstream ever adds a workspace-changed event subscription via the CLI
 socket, this notification post can be replaced by an external subscriber and
 the patch line dropped.
+
+## Tertiary patch: workspace-groups (multi-monitor sync)
+
+`workspace-groups = [['Hotrema', 'Hotrema-2'], ...]` config option. AeroSpace
+tracks the active workspace **per monitor, independently** — switching to a
+workspace only flips that workspace's own monitor. With a workspace pinned to
+each monitor (`Hotrema` → monitor 1, `Hotrema-2` → monitor 2), the two screens
+drift out of sync: opening a link that raises a window on `Hotrema` flips
+monitor 1 but leaves monitor 2 on whatever it showed.
+
+**The fix:** every focus-driven workspace switch funnels through the single
+`setFocus(to:)` in `Sources/AppBundle/focus.swift` (both the explicit
+`workspace` command and the follow-app-activation path via `focusWindow()`).
+After it makes the focused workspace active on its monitor, `setFocus` now
+calls `activateWorkspaceGroupPeers(of:)`, which finds the one group containing
+the focused workspace and calls `setActiveWorkspace` on each peer's monitor —
+**visibility only, not `setFocus`**, so keyboard focus stays on the window the
+user landed on, and there is no recursion (`setActiveWorkspace` never calls
+`setFocus`). Peers resolving to the just-focused monitor are skipped so they
+don't evict it.
+
+Why one hook in `setFocus` rather than a new command or a config-driven exec:
+- It is the single choke point all workspace switches route through, so one
+  edit covers keybind switches and the follow-activation path alike.
+- An `exec-on-workspace-change` script calling `aerospace workspace <peer>`
+  would move focus to the peer monitor — the opposite of what's wanted. No
+  native command makes a workspace visible without focusing it, so this needs
+  in-code support.
+
+Requirements/behavior:
+- Peers must be force-assigned to distinct monitors via
+  `workspace-to-monitor-force-assignment`; otherwise a peer's `workspaceMonitor`
+  falls back to last-assigned point or `mainMonitor` and may land wrong.
+- Symmetric (any member triggers the whole group) and always-override (a peer
+  monitor is re-synced even if manually switched away).
+- Multi-monitor behavior isn't unit-testable (`monitors` returns a single
+  hard-coded `testMonitor` under `isUnitTest`); only the config parser is
+  covered by a test. Verify end-to-end on the two-monitor machine.

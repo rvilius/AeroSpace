@@ -126,6 +126,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
 
     "gaps": Parser(\.gaps, parseGaps),
     "workspace-to-monitor-force-assignment": Parser(\.workspaceToMonitorForceAssignment, parseWorkspaceToMonitorAssignment),
+    "workspace-groups": Parser(\.workspaceGroups, parseWorkspaceGroups),
     "on-window-detected": Parser(\.onWindowDetected, parseOnWindowDetectedArray),
 
     // Deprecated
@@ -353,6 +354,15 @@ private func parsePersistentWorkspaces(_ raw: Json, _ backtrace: ConfigBacktrace
         .flatMap { arr in
             let set = arr.toOrderedSet()
             return set.count == arr.count ? .success(set) : .failure(.semantic(backtrace, "Contains duplicated workspace names"))
+        }
+}
+
+private func parseWorkspaceGroups(_ raw: Json, _ backtrace: ConfigBacktrace) -> ParsedConfig<[[String]]> {
+    parseTomlArray(raw, backtrace)
+        .flatMap { arr in
+            arr.enumerated().mapAllOrFailure { (index, elem) in
+                parseArrayOfStrings(elem, backtrace + .index(index))
+            }
         }
 }
 

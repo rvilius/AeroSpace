@@ -70,9 +70,26 @@ private struct FrozenFocus: AeroAny, Equatable, Sendable {
 
     _focus = newFocus.frozen
     let status = newFocus.workspace.workspaceMonitor.setActiveWorkspace(newFocus.workspace)
+    activateWorkspaceGroupPeers(of: newFocus.workspace)
 
     newFocus.windowOrNil?.markAsMostRecentChild()
     return status
+}
+
+// Fork-only: keep grouped workspaces (e.g. Hotrema / Hotrema-2, each force-assigned to its own
+// monitor) switched together. Makes peers visible on their monitors without moving keyboard
+// focus. See the `workspace-groups` config option.
+@MainActor private func activateWorkspaceGroupPeers(of workspace: Workspace) {
+    guard let group = config.workspaceGroups.first(where: { $0.contains(workspace.name) })
+    else { return }
+    let focusedPoint = workspace.workspaceMonitor.rect.topLeftCorner
+    for name in group where name != workspace.name {
+        let peer = Workspace.get(byName: name)
+        // Skip peers that resolve to the just-focused monitor — activating them there would
+        // evict the workspace we just focused.
+        if peer.workspaceMonitor.rect.topLeftCorner == focusedPoint { continue }
+        _ = peer.workspaceMonitor.setActiveWorkspace(peer)
+    }
 }
 extension Window {
     @MainActor func focusWindow() -> Bool {
