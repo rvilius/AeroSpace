@@ -53,7 +53,12 @@ final class MacApp: AbstractApp {
             try checkCancellation()
             if let wip = wipPids[pid] {
                 try await wip.await()
-                continue
+                // nil means the registration attempt failed (app didn't respond to AX,
+                // e.g. busy/hung during a display reconfiguration, or already dead).
+                // Return nil instead of retrying in a loop: an unbounded zero-backoff
+                // retry here spins the CPU and livelocks the refresh session.
+                // The next refresh session naturally retries the registration.
+                return allAppsMap[pid]
             }
             let wip = AwaitableOneTimeBroadcastLatch()
             wipPids[pid] = wip
