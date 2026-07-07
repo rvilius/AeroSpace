@@ -28,3 +28,9 @@ rm -rf /tmp/aerospace-from-sources-brew-cache
 HOMEBREW_CACHE=/tmp/aerospace-from-sources-brew-cache brew install-path ./.release/aerospace-dev.rb
 
 rm -rf "$(brew --prefix)/Library/Taps/aerospace-dev-user" # Compatibility. Drop after a while
+
+# Restart into the freshly-installed build. Kill BOTH process names first
+# (installed 'AeroSpace' + any dev 'AeroSpaceApp' from run-debug.sh) — same bundle
+# id, so leaving a dev copy alive here spawns a duplicate instance.
+killall AeroSpace AeroSpaceApp 2>/dev/null
+open -a AeroSpace
