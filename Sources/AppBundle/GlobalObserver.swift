@@ -1,6 +1,24 @@
 import AppKit
 import Common
 
+/// Whether the mouse currently sits on a Dock window (icon strip or a
+/// minimized-window tile). Frontmost window under the cursor wins —
+/// CGWindowListCopyWindowInfo returns front-to-back order.
+private func isClickOnDock() -> Bool {
+    guard let dockPid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock")
+        .first?.processIdentifier else { return false }
+    let point = mouseLocation
+    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    guard let windows = CGWindowListCopyWindowInfo(options, CGWindowID(0)) as? [[String: Any]] else { return false }
+    for w in windows {
+        guard let boundsDict = w[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
+              bounds.contains(point) else { continue }
+        return (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == dockPid
+    }
+    return false
+}
+
 enum GlobalObserver {
     private static func onNotif(_ notification: Notification) {
         // Third line of defence against lock screen window. See: closedWindowsCache
@@ -70,8 +88,16 @@ enum GlobalObserver {
             }
         }
 
+        // Mouse is gated on the Dock: a click can only *deliberately* activate a
+        // hidden-workspace window through the Dock (icon / minimized-window
+        // click). Ordinary window clicks land on the visible workspace, so
+        // recording them only kept the 0.5s gate perpetually open during normal
+        // mouse work and let real background steals through (the mouse twin of
+        // the every-keystroke bug above).
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
-            MainActor.assumeIsolated { lastUserInputDate = .now }
+            if isClickOnDock() {
+                MainActor.assumeIsolated { lastUserInputDate = .now }
+            }
             // todo reduce number of refreshSession in the callback
             //  resetManipulatedWithMouseIfPossible might call its own refreshSession
             //  The end of the callback calls refreshSession

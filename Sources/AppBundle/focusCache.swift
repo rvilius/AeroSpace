@@ -111,9 +111,10 @@ import Foundation
     //      its background raise must stay suppressed (covers ab88df1 and the VS
     //      Code new-window steal even if the raise beats window registration).
     // ponytail: temporal correlation, not causality — a real background steal
-    //   within 0.5s of unrelated input on the current workspace still gets
-    //   followed. Gates 2–3 kill the worst cases; the short window keeps the
-    //   rest rare. 0.5 is the tunable knob.
+    //   within 0.5s of a Dock click or Cmd-keypress still gets followed.
+    //   Ordinary typing and window clicks no longer open this gate (see
+    //   GlobalObserver: Cmd-gated keyboard, Dock-gated mouse), so the race is
+    //   now rare by construction. 0.5 is the tunable knob.
     if let input = lastUserInputDate,
        input.distance(to: .now) < 0.5,
        f.windowOrNil != nil,
