@@ -4,6 +4,19 @@ import Common
 /// Whether the mouse currently sits on a Dock window (icon strip or a
 /// minimized-window tile). Frontmost window under the cursor wins —
 /// CGWindowListCopyWindowInfo returns front-to-back order.
+/// Whether a keyDown is a deliberate *app-switch* gesture that can activate a
+/// window on another (hidden) workspace: Cmd-Tab / Cmd-Shift-Tab (app switcher)
+/// or Cmd-` / Cmd-~ (window cycle within the front app). Ordinary Cmd shortcuts
+/// (Cmd-C/V/S/Z/W/F/arrows…) are NOT app switches — recording them kept the 0.5s
+/// deliberate-activation gate perpetually open during normal work and let real
+/// background steals through. This is the keyboard twin of the every-click mouse
+/// bug fixed by gating the mouse on the Dock (b06b6f4); `.command`-only matched
+/// far more than the "app-switch gestures" its comment claimed.
+func isAppSwitchKeyGesture(_ modifierFlags: NSEvent.ModifierFlags, _ keyCode: UInt16) -> Bool {
+    // kVK_Tab = 48, kVK_ANSI_Grave (`) = 50
+    modifierFlags.contains(.command) && (keyCode == 48 || keyCode == 50)
+}
+
 private func isClickOnDock() -> Bool {
     guard let dockPid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock")
         .first?.processIdentifier else { return false }
@@ -77,13 +90,14 @@ enum GlobalObserver {
         // event-monitor contract), so this beats any later didActivate-triggered
         // refresh that reads it.
         //
-        // Keyboard is gated on Cmd held: that captures the native app-switch
-        // gestures (Cmd-Tab, Cmd-`) while ignoring ordinary typing. Recording on
-        // *every* keystroke would keep the 0.5s gate perpetually open during
-        // typing and let real background steals through — the exact bug the guard
-        // exists to stop.
+        // Keyboard is gated on the app-switch gestures only (Cmd-Tab, Cmd-`).
+        // Recording on *every* Cmd shortcut — Cmd-C/V/S/Z/W/F/arrows — kept the
+        // 0.5s gate open all through normal work and let real background steals
+        // through (VS Code's self-activation landing within 0.5s of any Cmd
+        // press). That was the keyboard twin of the every-click mouse bug; see
+        // isAppSwitchKeyGesture.
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
-            if event.modifierFlags.contains(.command) {
+            if isAppSwitchKeyGesture(event.modifierFlags, event.keyCode) {
                 MainActor.assumeIsolated { lastUserInputDate = .now }
             }
         }

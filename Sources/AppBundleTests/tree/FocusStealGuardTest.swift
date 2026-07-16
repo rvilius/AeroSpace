@@ -16,6 +16,21 @@ final class FocusStealGuardTest: XCTestCase {
         lastUserInputDate = nil // isolate from the deliberate-activation gate
     }
 
+    func test_isAppSwitchKeyGesture_onlyTabAndBacktick() async throws {
+        let cmd: NSEvent.ModifierFlags = [.command]
+        // App-switch keys under Cmd -> deliberate activation, gate opens.
+        XCTAssertTrue(isAppSwitchKeyGesture(cmd, 48), "Cmd-Tab is an app switch")
+        XCTAssertTrue(isAppSwitchKeyGesture([.command, .shift], 48), "Cmd-Shift-Tab is an app switch")
+        XCTAssertTrue(isAppSwitchKeyGesture(cmd, 50), "Cmd-` cycles app windows")
+        // Ordinary Cmd shortcuts must NOT open the gate (the recurrence bug).
+        XCTAssertFalse(isAppSwitchKeyGesture(cmd, 8), "Cmd-C must not count")   // kVK_ANSI_C
+        XCTAssertFalse(isAppSwitchKeyGesture(cmd, 9), "Cmd-V must not count")   // kVK_ANSI_V
+        XCTAssertFalse(isAppSwitchKeyGesture(cmd, 1), "Cmd-S must not count")   // kVK_ANSI_S
+        XCTAssertFalse(isAppSwitchKeyGesture(cmd, 49), "Cmd-Space must not count") // kVK_Space
+        // Tab without Cmd is just a Tab.
+        XCTAssertFalse(isAppSwitchKeyGesture([], 48), "bare Tab is not an app switch")
+    }
+
     func test_recentUserGesture_followsDeliberateActivation() async throws {
         config.keepNewWindowOnActiveWorkspace = true
         let home = focus.workspace
