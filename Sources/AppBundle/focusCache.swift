@@ -95,9 +95,13 @@ import Foundation
           stolen.windowId != f.windowOrNil?.windowId,
           let stolenWs = stolen.nodeWorkspace,
           stolenWs.name != f.workspace.name,
-          !stolenWs.isVisible,
-          !config.focusStealAllowApps.contains(stolen.app.rawAppBundleId ?? "")
+          !stolenWs.isVisible
     else { return false }
+    let stealDesc = "\(stolen.app.rawAppBundleId ?? "?") id=\(stolen.windowId) \(f.workspace.name) -> \(stolenWs.name)"
+    if config.focusStealAllowApps.contains(stolen.app.rawAppBundleId ?? "") {
+        logFocusGuard("FOLLOW allow-app \(stealDesc)")
+        return false
+    }
 
     // A cross-workspace focus change that closely trails a physical user
     // gesture is a deliberate activation of an already-open app (Dock click,
@@ -120,9 +124,27 @@ import Foundation
        f.windowOrNil != nil,
        recentlyOpenedWindow.map({ $0.date.distance(to: .now) >= 2.0 }) ?? true
     {
+        logFocusGuard("FOLLOW gesture(\(Int(input.distance(to: .now) * 1000))ms) \(stealDesc)")
         return false
     }
+    logFocusGuard("SNAP-BACK \(stealDesc)")
     return true
+}
+
+/// Appends cross-workspace focus-guard decisions to ~/.config/aerospace/aerospace.log
+/// (same file the watchdog/snap-size helpers write to) so post-hoc "why was I
+/// yanked to workspace X" questions are answerable.
+@MainActor func logFocusGuard(_ msg: String) {
+    let path = NSHomeDirectory() + "/.config/aerospace/aerospace.log"
+    let line = "\(ISO8601DateFormatter().string(from: Date())) [focus-guard] \(msg)\n"
+    if !FileManager.default.fileExists(atPath: path) {
+        FileManager.default.createFile(atPath: path, contents: nil)
+    }
+    if let h = FileHandle(forWritingAtPath: path), let data = line.data(using: .utf8) {
+        h.seekToEndOfFile()
+        h.write(data)
+        try? h.close()
+    }
 }
 
 /// The window focus should be held on for a detected steal, or nil when it
