@@ -14,7 +14,16 @@ import Common
 /// far more than the "app-switch gestures" its comment claimed.
 func isAppSwitchKeyGesture(_ modifierFlags: NSEvent.ModifierFlags, _ keyCode: UInt16) -> Bool {
     // kVK_Tab = 48, kVK_ANSI_Grave (`) = 50
-    modifierFlags.contains(.command) && (keyCode == 48 || keyCode == 50)
+    if modifierFlags.contains(.command) && (keyCode == 48 || keyCode == 50) { return true }
+    return isHyperChord(modifierFlags)
+}
+
+/// A full hyper chord (⌃⌥⇧⌘, e.g. a Caps Lock remap driving global app
+/// hotkeys) is never ordinary typing — always a deliberate jump. Checked on
+/// flagsChanged too, because a RegisterEventHotKey-consumed chord (Raycast &
+/// co.) never reaches keyDown global monitors — only its modifier press does.
+func isHyperChord(_ modifierFlags: NSEvent.ModifierFlags) -> Bool {
+    modifierFlags.isSuperset(of: [.command, .control, .option, .shift])
 }
 
 private func isClickOnDock() -> Bool {
@@ -98,6 +107,16 @@ enum GlobalObserver {
         // isAppSwitchKeyGesture.
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             if isAppSwitchKeyGesture(event.modifierFlags, event.keyCode) {
+                MainActor.assumeIsolated { lastUserInputDate = .now }
+            }
+        }
+
+        // Hyper-chord hotkeys (Caps Lock remap + key, registered by Raycast &
+        // co. via RegisterEventHotKey) are consumed by the window server and
+        // never reach the keyDown monitor above. The modifier press itself is
+        // not consumed though — record the gesture on hyper-down instead.
+        NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { event in
+            if isHyperChord(event.modifierFlags) {
                 MainActor.assumeIsolated { lastUserInputDate = .now }
             }
         }

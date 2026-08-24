@@ -29,6 +29,35 @@ final class FocusStealGuardTest: XCTestCase {
         XCTAssertFalse(isAppSwitchKeyGesture(cmd, 49), "Cmd-Space must not count") // kVK_Space
         // Tab without Cmd is just a Tab.
         XCTAssertFalse(isAppSwitchKeyGesture([], 48), "bare Tab is not an app switch")
+        // Hyper chord (Caps Lock remap ⌃⌥⇧⌘) is a deliberate global hotkey.
+        let hyper: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
+        XCTAssertTrue(isAppSwitchKeyGesture(hyper, 18), "Hyper-1 is a deliberate jump") // kVK_ANSI_1
+        XCTAssertFalse(isAppSwitchKeyGesture([.command, .option, .shift], 18), "3-mod chord must not count")
+    }
+
+    func test_ruleRoutedNewWindow_followedAfterGesture() async throws {
+        config.keepNewWindowOnActiveWorkspace = true
+        let home = focus.workspace
+        _ = TestWindow.new(id: 1, parent: home.rootTilingContainer).focusWindow()
+        let other = Workspace.get(byName: "other")
+        let newWin = TestWindow.new(id: 2, parent: other.rootTilingContainer)
+        recentlyOpenedWindow = RecentlyOpenedWindow(windowId: 2, workspaceName: other.name, appPid: 999, date: .now, placedByRule: true)
+
+        // Cold launch: gesture 2s ago (past the 0.5s gate), rule-routed new window -> follow.
+        lastUserInputDate = Date.now.addingTimeInterval(-2)
+        XCTAssertFalse(isCrossWorkspaceStealToHiddenWorkspace(newWin),
+                       "rule-routed new window activating after a hotkey is the hotkey landing")
+
+        // Same window, no gesture (login auto-launch) -> still a steal.
+        lastUserInputDate = nil
+        XCTAssertTrue(isCrossWorkspaceStealToHiddenWorkspace(newWin),
+                      "rule-routed new window with no gesture must not yank focus")
+
+        // Not rule-routed -> the 0.5s gate governs, 2s is stale.
+        recentlyOpenedWindow = RecentlyOpenedWindow(windowId: 2, workspaceName: other.name, appPid: 999, date: .now)
+        lastUserInputDate = Date.now.addingTimeInterval(-2)
+        XCTAssertTrue(isCrossWorkspaceStealToHiddenWorkspace(newWin),
+                      "unruled new window gets no launch-scale gesture window")
     }
 
     func test_recentUserGesture_followsDeliberateActivation() async throws {

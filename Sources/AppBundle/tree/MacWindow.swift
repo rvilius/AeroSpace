@@ -76,7 +76,7 @@ final class MacWindow: Window {
         // Record the new window (on its final workspace) so updateFocusCache can
         // hold focus on it against a same-app cross-workspace steal for ~2s.
         if config.keepNewWindowOnActiveWorkspace, !isStartup, let ws = window.nodeWorkspace {
-            recentlyOpenedWindow = RecentlyOpenedWindow(windowId: windowId, workspaceName: ws.name, appPid: macApp.pid, date: .now)
+            recentlyOpenedWindow = RecentlyOpenedWindow(windowId: windowId, workspaceName: ws.name, appPid: macApp.pid, date: .now, placedByRule: hasMatchingDetectRule)
         }
         return window
     }

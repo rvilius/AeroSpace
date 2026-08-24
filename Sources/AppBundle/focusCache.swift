@@ -103,6 +103,20 @@ import Foundation
         return false
     }
 
+    // A brand-new window that an on-window-detected rule routed to a hidden
+    // workspace, activating within launch-scale time of a gesture, is the
+    // user's hotkey landing (cold Safari profile launch: hyper-N -> Safari
+    // starts -> window born -> rule moves it -> Safari focuses it, 1-3s after
+    // the keypress). The rule is the user's explicit routing; follow it. The
+    // gesture requirement keeps login auto-launches (Slack -> Corp-Opus) from
+    // yanking focus. ponytail: 5s is the cold-launch knob.
+    if let r = recentlyOpenedWindow, r.windowId == stolen.windowId, r.placedByRule,
+       let input = lastUserInputDate, input.distance(to: .now) < 5.0
+    {
+        logFocusGuard("FOLLOW new-rule-window(\(Int(input.distance(to: .now) * 1000))ms) \(stealDesc)")
+        return false
+    }
+
     // A cross-workspace focus change that closely trails a physical user
     // gesture is a deliberate activation of an already-open app (Dock click,
     // Cmd-Tab, Spotlight) — follow it, don't treat it as a steal. Three-part

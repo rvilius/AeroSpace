@@ -139,6 +139,8 @@ struct RecentlyOpenedWindow {
     let workspaceName: String
     let appPid: Int32
     let date: Date
+    /// An on-window-detected rule claimed this window (user-controlled placement).
+    var placedByRule: Bool = false
 }
 
 // Used by focus-back-and-forth
