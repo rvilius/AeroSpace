@@ -128,8 +128,10 @@ enum GlobalObserver {
         // mouse work and let real background steals through (the mouse twin of
         // the every-keystroke bug above).
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
-            if isClickOnDock() {
-                MainActor.assumeIsolated { lastUserInputDate = .now }
+            let onDock = isClickOnDock()
+            MainActor.assumeIsolated {
+                if onDock { lastUserInputDate = .now }
+                logFocusGuard("mouseUp dock=\(onDock) at=\(mouseLocation)")
             }
             // todo reduce number of refreshSession in the callback
             //  resetManipulatedWithMouseIfPossible might call its own refreshSession

@@ -141,7 +141,8 @@ import Foundation
         logFocusGuard("FOLLOW gesture(\(Int(input.distance(to: .now) * 1000))ms) \(stealDesc)")
         return false
     }
-    logFocusGuard("SNAP-BACK \(stealDesc)")
+    let age = lastUserInputDate.map { "\(Int($0.distance(to: .now) * 1000))ms" } ?? "none"
+    logFocusGuard("SNAP-BACK gesture=\(age) focusedWin=\(f.windowOrNil != nil) recentOpen=\(recentlyOpenedWindow.map { Int($0.date.distance(to: .now) * 1000) } ?? -1)ms \(stealDesc)")
     return true
 }
 
