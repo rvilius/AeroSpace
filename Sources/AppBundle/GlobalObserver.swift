@@ -30,6 +30,11 @@ func isHyperChord(_ modifierFlags: NSEvent.ModifierFlags) -> Bool {
 /// for its AXList frame (CG top-left coords, same space as mouseLocation).
 /// Not CGWindowList: the Dock owns a full-screen layer-20 window, so a
 /// window hit-test says "Dock" for every click on the main display.
+private let launcherBundleIds: Set<String> = ["com.raycast.macos", "com.apple.Spotlight"]
+private func isLauncherFrontmost() -> Bool {
+    launcherBundleIds.contains(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "")
+}
+
 private func isClickOnDock() -> Bool {
     guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock")
         .first?.processIdentifier else { return false }
@@ -118,6 +123,11 @@ enum GlobalObserver {
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             if isAppSwitchKeyGesture(event.modifierFlags, event.keyCode) {
                 MainActor.assumeIsolated { lastUserInputDate = .now; lastGestureWasDockClick = false }
+            } else if isLauncherFrontmost() {
+                // Typing/Enter in Raycast or Spotlight: the launcher's activation
+                // of an app is as deliberate as a Dock click, so it may follow
+                // from an empty workspace too.
+                MainActor.assumeIsolated { lastUserInputDate = .now; lastGestureWasDockClick = true }
             }
         }
 
