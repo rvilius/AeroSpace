@@ -117,7 +117,7 @@ enum GlobalObserver {
         // isAppSwitchKeyGesture.
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             if isAppSwitchKeyGesture(event.modifierFlags, event.keyCode) {
-                MainActor.assumeIsolated { lastUserInputDate = .now }
+                MainActor.assumeIsolated { lastUserInputDate = .now; lastGestureWasDockClick = false }
             }
         }
 
@@ -127,7 +127,7 @@ enum GlobalObserver {
         // not consumed though — record the gesture on hyper-down instead.
         NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { event in
             if isHyperChord(event.modifierFlags) {
-                MainActor.assumeIsolated { lastUserInputDate = .now }
+                MainActor.assumeIsolated { lastUserInputDate = .now; lastGestureWasDockClick = false }
             }
         }
 
@@ -142,6 +142,7 @@ enum GlobalObserver {
             if onDock {
                 MainActor.assumeIsolated {
                     lastUserInputDate = .now
+                    lastGestureWasDockClick = true
                     logFocusGuard("dock-click at=\(mouseLocation)")
                 }
             }

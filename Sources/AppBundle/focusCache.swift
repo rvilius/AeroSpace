@@ -7,6 +7,11 @@ import Foundation
 /// activation (Dock click, Cmd-Tab, Spotlight) from an app's background focus
 /// steal: a deliberate activation closely trails a gesture, a steal does not.
 @MainActor var lastUserInputDate: Date? = nil
+/// Whether the gesture behind lastUserInputDate was a Dock-strip click. A Dock
+/// click can only mean "bring this app forward", so it may follow even from an
+/// empty focused workspace (ab88df1's empty-workspace hold is for hotkey-driven
+/// new windows, where the raise of an existing hidden window is a side effect).
+@MainActor var lastGestureWasDockClick = false
 
 /// The data should flow (from nativeFocused to focused) and
 ///                      (from nativeFocused to lastKnownNativeFocusedWindowId)
@@ -135,7 +140,7 @@ import Foundation
     //   now rare by construction. 0.5 is the tunable knob.
     if let input = lastUserInputDate,
        input.distance(to: .now) < 0.5,
-       f.windowOrNil != nil,
+       f.windowOrNil != nil || lastGestureWasDockClick,
        recentlyOpenedWindow.map({ $0.date.distance(to: .now) >= 2.0 }) ?? true
     {
         logFocusGuard("FOLLOW gesture(\(Int(input.distance(to: .now) * 1000))ms) \(stealDesc)")
