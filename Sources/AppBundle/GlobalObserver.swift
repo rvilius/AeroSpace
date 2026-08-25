@@ -31,8 +31,15 @@ func isHyperChord(_ modifierFlags: NSEvent.ModifierFlags) -> Bool {
 /// Not CGWindowList: the Dock owns a full-screen layer-20 window, so a
 /// window hit-test says "Dock" for every click on the main display.
 private let launcherBundleIds: Set<String> = ["com.raycast.macos", "com.apple.Spotlight"]
-private func isLauncherFrontmost() -> Bool {
-    launcherBundleIds.contains(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "")
+/// Raycast/Spotlight run as non-activating panels — they never become the
+/// frontmost app — but they own an on-screen window only while open.
+private func isLauncherOnScreen() -> Bool {
+    let pids = Set(NSWorkspace.shared.runningApplications
+        .filter { launcherBundleIds.contains($0.bundleIdentifier ?? "") }
+        .map { $0.processIdentifier })
+    if pids.isEmpty { return false }
+    guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], CGWindowID(0)) as? [[String: Any]] else { return false }
+    return windows.contains { pids.contains((($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value) ?? -1) }
 }
 
 private func isClickOnDock() -> Bool {
@@ -123,11 +130,15 @@ enum GlobalObserver {
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             if isAppSwitchKeyGesture(event.modifierFlags, event.keyCode) {
                 MainActor.assumeIsolated { lastUserInputDate = .now; lastGestureWasDockClick = false }
-            } else if isLauncherFrontmost() {
+            } else if isLauncherOnScreen() {
                 // Typing/Enter in Raycast or Spotlight: the launcher's activation
                 // of an app is as deliberate as a Dock click, so it may follow
                 // from an empty workspace too.
-                MainActor.assumeIsolated { lastUserInputDate = .now; lastGestureWasDockClick = true }
+                MainActor.assumeIsolated {
+                    lastUserInputDate = .now
+                    lastGestureWasDockClick = true
+                    logFocusGuard("launcher-key code=\(event.keyCode)")
+                }
             }
         }
 
