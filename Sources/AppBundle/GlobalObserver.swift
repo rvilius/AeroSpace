@@ -26,17 +26,27 @@ func isHyperChord(_ modifierFlags: NSEvent.ModifierFlags) -> Bool {
     modifierFlags.isSuperset(of: [.command, .control, .option, .shift])
 }
 
+/// True when the mouse is over the Dock's icon strip. Asks the Dock's AX tree
+/// for its AXList frame (CG top-left coords, same space as mouseLocation).
+/// Not CGWindowList: the Dock owns a full-screen layer-20 window, so a
+/// window hit-test says "Dock" for every click on the main display.
 private func isClickOnDock() -> Bool {
-    guard let dockPid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock")
+    guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock")
         .first?.processIdentifier else { return false }
+    var kids: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXChildrenAttribute as CFString, &kids) == .success,
+          let children = kids as? [AXUIElement] else { return false }
     let point = mouseLocation
-    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-    guard let windows = CGWindowListCopyWindowInfo(options, CGWindowID(0)) as? [[String: Any]] else { return false }
-    for w in windows {
-        guard let boundsDict = w[kCGWindowBounds as String] as? NSDictionary,
-              let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
-              bounds.contains(point) else { continue }
-        return (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == dockPid
+    for c in children {
+        var role: CFTypeRef?, pos: CFTypeRef?, size: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(c, kAXRoleAttribute as CFString, &role) == .success,
+              role as? String == kAXListRole,
+              AXUIElementCopyAttributeValue(c, kAXPositionAttribute as CFString, &pos) == .success,
+              AXUIElementCopyAttributeValue(c, kAXSizeAttribute as CFString, &size) == .success else { continue }
+        var p = CGPoint.zero, sz = CGSize.zero
+        AXValueGetValue(pos as! AXValue, .cgPoint, &p)
+        AXValueGetValue(size as! AXValue, .cgSize, &sz)
+        return CGRect(origin: p, size: sz).contains(point)
     }
     return false
 }
@@ -129,9 +139,11 @@ enum GlobalObserver {
         // the every-keystroke bug above).
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
             let onDock = isClickOnDock()
-            MainActor.assumeIsolated {
-                if onDock { lastUserInputDate = .now }
-                logFocusGuard("mouseUp dock=\(onDock) at=\(mouseLocation)")
+            if onDock {
+                MainActor.assumeIsolated {
+                    lastUserInputDate = .now
+                    logFocusGuard("dock-click at=\(mouseLocation)")
+                }
             }
             // todo reduce number of refreshSession in the callback
             //  resetManipulatedWithMouseIfPossible might call its own refreshSession
