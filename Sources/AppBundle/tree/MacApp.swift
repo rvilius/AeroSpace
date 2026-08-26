@@ -248,7 +248,7 @@ final class MacApp: AbstractApp {
             // Register new apps
             for nsApp in NSWorkspace.shared.runningApplications {
                 try checkCancellation()
-                if nsApp.activationPolicy == .regular {
+                if nsApp.activationPolicy == .regular || (nsApp.activationPolicy == .accessory && config.trackAccessoryApps.contains(nsApp.bundleIdentifier ?? "")) {
                     refreshTheApp(nsApp)
                 }
             }

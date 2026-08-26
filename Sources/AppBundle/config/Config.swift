@@ -48,6 +48,8 @@ struct Config: ConvenienceCopyable {
     // For apps you deliberately jump to via a non-AeroSpace global hotkey
     // (e.g. Safari profile windows routed by on-window-detected rules).
     var focusStealAllowApps: [String] = []
+    // Fork-only: accessory (LSUIElement) apps that AeroSpace should manage like regular ones.
+    var trackAccessoryApps: [String] = []
     var startAtLogin: Bool = false
     var autoReloadConfig: Bool = false
     var automaticallyUnhideMacosHiddenApps: Bool = false
