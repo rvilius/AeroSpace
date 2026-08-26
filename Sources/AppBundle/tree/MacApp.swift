@@ -9,6 +9,7 @@ final class MacApp: AbstractApp {
     /*conforms*/ let rawAppBundleId: String?
     let appId: KnownBundleId?
     let nsApp: NSRunningApplication
+    private let isTrackedAccessoryApp: Bool
     private let axApp: ThreadGuardedValue<AXUIElement>
     private let appAxSubscriptions: ThreadGuardedValue<[AxSubscription]> // keep subscriptions in memory
     private let windows: ThreadGuardedValue<[UInt32: AxWindow]> = .init([:])
@@ -27,8 +28,9 @@ final class MacApp: AbstractApp {
     @MainActor static var allAppsMap: [pid_t: MacApp] = [:]
     @MainActor private static var wipPids: [pid_t: AwaitableOneTimeBroadcastLatch] = [:]
 
-    private init(_ nsApp: NSRunningApplication, _ axApp: AXUIElement, _ axSubscriptions: [AxSubscription], _ thread: Thread) {
+    private init(_ nsApp: NSRunningApplication, _ axApp: AXUIElement, _ axSubscriptions: [AxSubscription], _ thread: Thread, isTrackedAccessoryApp: Bool) {
         self.nsApp = nsApp
+        self.isTrackedAccessoryApp = isTrackedAccessoryApp
         self.axApp = .init(axApp)
         self.pid = nsApp.processIdentifier
         self.rawAppBundleId = nsApp.bundleIdentifier
@@ -62,6 +64,7 @@ final class MacApp: AbstractApp {
             }
             let wip = AwaitableOneTimeBroadcastLatch()
             wipPids[pid] = wip
+            let isTrackedAccessoryApp = config.trackAccessoryApps.contains(nsApp.bundleIdentifier ?? "")
 
             let thread = Thread {
                 $axTaskLocalAppThreadToken.withValue(AxAppThreadToken(pid: pid, idForDebug: nsApp.idForDebug)) {
@@ -72,7 +75,7 @@ final class MacApp: AbstractApp {
                     let job = RunLoopJob()
                     let subscriptions = (try? unsafe AxSubscription.bulkSubscribe(nsApp, axApp, job, handlers)) ?? []
                     let isGood = !subscriptions.isEmpty
-                    let app = isGood ? MacApp(nsApp, axApp, subscriptions, Thread.current) : nil
+                    let app = isGood ? MacApp(nsApp, axApp, subscriptions, Thread.current, isTrackedAccessoryApp: isTrackedAccessoryApp) : nil
                     Task { @MainActor in
                         allAppsMap[pid] = app
                         await wip.signalToAll()
@@ -170,7 +173,7 @@ final class MacApp: AbstractApp {
 
     // Fork-only: apps listed in track-accessory-apps go through the window heuristics as if regular.
     private var effectiveActivationPolicy: NSApplication.ActivationPolicy {
-        config.trackAccessoryApps.contains(nsApp.bundleIdentifier ?? "") ? .regular : nsApp.activationPolicy
+        isTrackedAccessoryApp ? .regular : nsApp.activationPolicy
     }
 
     func isWindowHeuristic(_ windowId: UInt32, _ windowLevel: MacOsWindowLevel?) async throws -> Bool {
