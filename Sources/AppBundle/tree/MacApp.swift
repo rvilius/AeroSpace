@@ -168,15 +168,22 @@ final class MacApp: AbstractApp {
         }
     }
 
+    // Fork-only: apps listed in track-accessory-apps go through the window heuristics as if regular.
+    private var effectiveActivationPolicy: NSApplication.ActivationPolicy {
+        config.trackAccessoryApps.contains(nsApp.bundleIdentifier ?? "") ? .regular : nsApp.activationPolicy
+    }
+
     func isWindowHeuristic(_ windowId: UInt32, _ windowLevel: MacOsWindowLevel?) async throws -> Bool {
-        return try await withWindow(windowId) { [nsApp, axApp, appId] window, job in
-            window.isWindowHeuristic(axApp: axApp.threadGuarded, appId, nsApp.activationPolicy, windowLevel)
+        let policy = effectiveActivationPolicy
+        return try await withWindow(windowId) { [axApp, appId] window, job in
+            window.isWindowHeuristic(axApp: axApp.threadGuarded, appId, policy, windowLevel)
         } == true
     }
 
     func getAxUiElementWindowType(_ windowId: UInt32, _ windowLevel: MacOsWindowLevel?) async throws -> AxUiElementWindowType {
-        return try await withWindow(windowId) { [nsApp, axApp, appId] window, job in
-            window.getWindowType(axApp: axApp.threadGuarded, appId, nsApp.activationPolicy, windowLevel)
+        let policy = effectiveActivationPolicy
+        return try await withWindow(windowId) { [axApp, appId] window, job in
+            window.getWindowType(axApp: axApp.threadGuarded, appId, policy, windowLevel)
         } ?? .window
     }
 
