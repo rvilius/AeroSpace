@@ -12,6 +12,16 @@ import Foundation
 /// empty focused workspace (ab88df1's empty-workspace hold is for hotkey-driven
 /// new windows, where the raise of an existing hidden window is a side effect).
 @MainActor var lastGestureWasDockClick = false
+/// Whether the gesture behind lastUserInputDate was a hyper chord (Caps Lock
+/// remap driving a launcher hotkey, seen only as its modifier press — see
+/// GlobalObserver). A hyper hotkey runs a launcher action whose app activation
+/// trails the press by launch-scale time, not keypress-scale: a warm Safari
+/// profile hotkey makes Raycast raise Safari's existing window on a hidden
+/// workspace ~1s later, past the 0.5s gate — the snap-back then deactivated
+/// Safari mid-flow and the profile window was never created. So a hyper
+/// gesture holds the deliberate-activation gate open longer, and — like a
+/// Dock click — may follow even from an empty focused workspace.
+@MainActor var lastGestureWasHyperChord = false
 
 /// The data should flow (from nativeFocused to focused) and
 ///                      (from nativeFocused to lastKnownNativeFocusedWindowId)
@@ -139,8 +149,8 @@ import Foundation
     //   GlobalObserver: Cmd-gated keyboard, Dock-gated mouse), so the race is
     //   now rare by construction. 0.5 is the tunable knob.
     if let input = lastUserInputDate,
-       input.distance(to: .now) < 0.5,
-       f.windowOrNil != nil || lastGestureWasDockClick,
+       input.distance(to: .now) < (lastGestureWasHyperChord ? 3.0 : 0.5),
+       f.windowOrNil != nil || lastGestureWasDockClick || lastGestureWasHyperChord,
        recentlyOpenedWindow.map({ $0.date.distance(to: .now) >= 2.0 }) ?? true
     {
         logFocusGuard("FOLLOW gesture(\(Int(input.distance(to: .now) * 1000))ms) \(stealDesc)")

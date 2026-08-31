@@ -129,7 +129,11 @@ enum GlobalObserver {
         // isAppSwitchKeyGesture.
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             if isAppSwitchKeyGesture(event.modifierFlags, event.keyCode) {
-                MainActor.assumeIsolated { lastUserInputDate = .now; lastGestureWasDockClick = false }
+                MainActor.assumeIsolated {
+                    lastUserInputDate = .now
+                    lastGestureWasDockClick = false
+                    lastGestureWasHyperChord = isHyperChord(event.modifierFlags)
+                }
             } else if isLauncherOnScreen() {
                 // Typing/Enter in Raycast or Spotlight: the launcher's activation
                 // of an app is as deliberate as a Dock click, so it may follow
@@ -137,6 +141,7 @@ enum GlobalObserver {
                 MainActor.assumeIsolated {
                     lastUserInputDate = .now
                     lastGestureWasDockClick = true
+                    lastGestureWasHyperChord = false
                     logFocusGuard("launcher-key code=\(event.keyCode)")
                 }
             }
@@ -148,7 +153,11 @@ enum GlobalObserver {
         // not consumed though — record the gesture on hyper-down instead.
         NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { event in
             if isHyperChord(event.modifierFlags) {
-                MainActor.assumeIsolated { lastUserInputDate = .now; lastGestureWasDockClick = false }
+                MainActor.assumeIsolated {
+                    lastUserInputDate = .now
+                    lastGestureWasDockClick = false
+                    lastGestureWasHyperChord = true
+                }
             }
         }
 
@@ -164,6 +173,7 @@ enum GlobalObserver {
                 MainActor.assumeIsolated {
                     lastUserInputDate = .now
                     lastGestureWasDockClick = true
+                    lastGestureWasHyperChord = false
                     logFocusGuard("dock-click at=\(mouseLocation)")
                 }
             }
