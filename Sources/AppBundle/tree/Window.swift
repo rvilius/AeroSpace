@@ -46,8 +46,12 @@ open class Window: TreeNode, Hashable {
 
 enum LayoutReason: Equatable {
     case standard
-    /// Reason for the cur temp layout is macOS native fullscreen, minimize, or hide
-    case macos(prevParentKind: NonLeafTreeNodeKind)
+    /// Reason for the cur temp layout is macOS native fullscreen, minimize, or hide.
+    /// `prevWorkspaceName` is set for minimize only: minimized windows are parked in the
+    /// single *global* macosMinimizedWindowsContainer and lose their workspace, so the
+    /// workspace to restore them to has to be remembered here. Fullscreen and hidden
+    /// windows stay in their own workspace's container and already know where they belong.
+    case macos(prevParentKind: NonLeafTreeNodeKind, prevWorkspaceName: String?)
 }
 
 extension Window {
