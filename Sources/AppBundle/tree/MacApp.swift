@@ -131,6 +131,13 @@ final class MacApp: AbstractApp {
             nsApp.activate(options: .activateIgnoringOtherApps)
         } else {
             MacApp.focusJob = withWindowAsync(windowId) { [nsApp] window, job in
+                // Never raise a minimized window: AXRaise un-minimizes it. The
+                // focus-steal snap-back (focusCache.swift) lands here holding the
+                // window the user just minimized, because updateFocusCache runs
+                // before normalizeLayoutReason parks it in the minimized container
+                // -- so the raise popped it straight back out (~430ms after Cmd-M).
+                // focusWindow() already refuses minimized windows; match it.
+                if window.get(Ax.minimizedAttr) == true { return }
                 // Raise firstly to make sure that by the time we activate the app, the window would be already on top
                 window.set(Ax.isMainAttr, true)
                 AXUIElementPerformAction(window, kAXRaiseAction as CFString)
