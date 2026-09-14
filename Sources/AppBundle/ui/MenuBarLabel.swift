@@ -141,7 +141,7 @@ struct MenuBarLabel: View {
                     .foregroundStyle(finalColor)
                     .frame(width: itemSize, height: itemSize)
             } else {
-                let text = Text(item.name)
+                let text = Text(menuBarShortName(item.name))
                     .font(.system(.largeTitle))
                     .bold()
                     .padding(.horizontal, itemBorderSize * 2)
@@ -167,6 +167,21 @@ struct MenuBarLabel: View {
             }
         }
     }
+}
+
+/// Fork-only: menu bar pills show the first 3 letters of a workspace name, uppercased,
+/// keeping a trailing "-N" suffix ("KD-Jupiter-2" -> "KDJ-2"). Names without letters are shown as-is.
+func menuBarShortName(_ name: String) -> String {
+    var base = Substring(name)
+    var suffix = ""
+    if let dash = name.lastIndex(of: "-"), name.index(after: dash) < name.endIndex,
+       name[name.index(after: dash)...].allSatisfy(\.isNumber)
+    {
+        base = name[..<dash]
+        suffix = String(name[dash...])
+    }
+    let letters = base.filter(\.isLetter)
+    return letters.isEmpty ? name : letters.prefix(3).uppercased() + suffix
 }
 
 extension String {
