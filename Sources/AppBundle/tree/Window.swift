@@ -9,6 +9,8 @@ open class Window: TreeNode, Hashable {
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
     var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
+    // Fork: size to apply on the next unhide, set by `move-node-to-workspace --frame`
+    var pendingUnhideSize: CGSize?
 
     @MainActor
     init(id: UInt32, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {

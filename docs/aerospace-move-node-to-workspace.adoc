@@ -13,7 +13,8 @@ aerospace move-node-to-workspace [-h|--help] [--focus-follows-window] [--wrap-ar
                                  [--stdin|--no-stdin]
                                  (next|prev)
 aerospace move-node-to-workspace [-h|--help] [--focus-follows-window] [--fail-if-noop]
-                                 [--window-id <window-id>] <workspace-name>
+                                 [--window-id <window-id>] [--frame <x>,<y>,<width>,<height>]
+                                 <workspace-name>
 
 // end::synopsis[]
 
@@ -38,6 +39,11 @@ This flag is a shortcut for manually running `aerospace-workspace`/`aerospace-fo
 
 --window-id <window-id>::
 include::./util/window-id-flag-desc.adoc[]
+
+--frame <x>,<y>,<width>,<height>::
+Fork option. Set the frame of a floating window, in global points with a top-left origin.
+If the window is hidden, or `<workspace-name>` is not visible, the window is not moved; the frame is applied when the window is next shown, so it never flashes on the visible monitor.
+Ignored for tiling windows. A leading negative x is parsed as a flag and rejected.
 
 --stdin::
 Read the list of workspaces from stdin.

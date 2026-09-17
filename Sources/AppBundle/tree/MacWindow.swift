@@ -260,12 +260,33 @@ extension Window {
                     proportion: prevUnhiddenProportionalPositionInsideWorkspaceRect,
                     floatingSize: lastFloatingSize,
                 )
-                setAxFrame(newTopLeft, nil)
+                setAxFrame(newTopLeft, pendingUnhideSize)
             case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow, .macosNativeMinimizedWindow,
                  .macosPopupWindow, .tiling, .rootTilingContainer, .shimContainerRelation: break
         }
 
         self.prevUnhiddenProportionalPositionInsideWorkspaceRect = nil
+        self.pendingUnhideSize = nil
+    }
+
+    // Fork: `move-node-to-workspace --frame`. A window that is hidden, or will be
+    // once it lands on an invisible workspace, is not touched: any AX move would
+    // show it on the visible monitor until the next refresh corners it again
+    // (~90 ms, a visible flash). The frame becomes its unhide position instead.
+    @MainActor
+    func setFloatingFrame(topLeft: CGPoint, size: CGSize, on workspace: Workspace) {
+        if isHiddenInCorner || !workspace.isVisible {
+            // The monitor the frame sits on, as hideInCorner measures; unhide carries
+            // it across proportionally if the workspace shows elsewhere.
+            let rect = Rect(topLeftX: topLeft.x, topLeftY: topLeft.y, width: size.width, height: size.height)
+                .center.monitorApproximation.rect
+            let p = topLeft - rect.topLeftCorner
+            prevUnhiddenProportionalPositionInsideWorkspaceRect = CGPoint(x: p.x / rect.width, y: p.y / rect.height)
+            lastFloatingSize = size
+            pendingUnhideSize = size
+        } else {
+            setAxFrame(topLeft, size)
+        }
     }
 }
 

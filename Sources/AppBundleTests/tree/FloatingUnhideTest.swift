@@ -69,3 +69,49 @@ final class FloatingUnhideTest: XCTestCase {
         XCTAssertEqual(w.lastFloatingSize?.height, originalFloatingSize.height)
     }
 }
+
+// Fork: `move-node-to-workspace --frame` stores the frame of a window that is
+// (or is about to be) hidden instead of moving it, so a script can place a
+// hidden window without it flashing on the visible monitor. Applied on unhide.
+@MainActor
+final class MoveNodeToWorkspaceFrameTest: XCTestCase {
+    override func setUp() async throws { setUpWorkspacesForTests() }
+
+    func testParse() {
+        let args = parseCommand("move-node-to-workspace --frame 10,20,300,400 foo").cmdOrNil as? MoveNodeToWorkspaceCommand
+        assertEquals(args?.args.frame, FloatingFrame(x: 10, y: 20, width: 300, height: 400))
+        XCTAssertNotNil(parseCommand("move-node-to-workspace --frame 10,20,300 foo").errorOrNil)
+        XCTAssertNotNil(parseCommand("move-node-to-workspace --frame 10,20,0,400 foo").errorOrNil)
+        assertEquals(parseCommand("move-node-to-workspace --frame 10,20,300,400 next").errorOrNil, "--frame is incompatible with (next|prev)")
+    }
+
+    func testHiddenTarget_storesFrame_appliesOnUnhide() async throws {
+        let w = TestWindow.new(id: 1, parent: focus.workspace, rect: Rect(topLeftX: 30, topLeftY: 30, width: 800, height: 600))
+        var args = MoveNodeToWorkspaceCmdArgs(workspace: "b")
+        args.windowId = 1
+        args.frame = FloatingFrame(x: 1070, y: 108, width: 850, height: 864)
+        try await MoveNodeToWorkspaceCommand(args: args).run(.defaultEnv, .emptyStdin)
+
+        XCTAssertTrue(w.setAxFrameCalls.isEmpty, "a hidden window must not be moved on-screen")
+        XCTAssertTrue(w.isHiddenInCorner)
+        assertEquals(w.lastFloatingSize, CGSize(width: 850, height: 864))
+
+        w.unhideFromCorner()
+        assertEquals(w.setAxFrameCalls.last?.topLeft, CGPoint(x: 1070, y: 108))
+        assertEquals(w.setAxFrameCalls.last?.size, CGSize(width: 850, height: 864))
+        w.unhideFromCorner()
+        assertEquals(w.setAxFrameCalls.count, 1, additionalMsg: "the frame is applied once")
+    }
+
+    func testVisibleTarget_setsFrameNow() async throws {
+        let w = TestWindow.new(id: 1, parent: Workspace.get(byName: "a"), rect: Rect(topLeftX: 30, topLeftY: 30, width: 800, height: 600))
+        var args = MoveNodeToWorkspaceCmdArgs(workspace: focus.workspace.name)
+        args.windowId = 1
+        args.frame = FloatingFrame(x: 1070, y: 108, width: 850, height: 864)
+        try await MoveNodeToWorkspaceCommand(args: args).run(.defaultEnv, .emptyStdin)
+
+        XCTAssertFalse(w.isHiddenInCorner)
+        assertEquals(w.setAxFrameCalls.last?.topLeft, CGPoint(x: 1070, y: 108))
+        assertEquals(w.setAxFrameCalls.last?.size, CGSize(width: 850, height: 864))
+    }
+}

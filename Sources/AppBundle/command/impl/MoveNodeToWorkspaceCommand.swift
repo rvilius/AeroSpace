@@ -1,3 +1,4 @@
+import AppKit
 import Common
 
 struct MoveNodeToWorkspaceCommand: Command {
@@ -23,6 +24,15 @@ struct MoveNodeToWorkspaceCommand: Command {
                 targetWorkspace = ws
             case .direct(let name):
                 targetWorkspace = Workspace.get(byName: name.raw)
+        }
+        // Fork: frame first, so a window moved from a visible to a hidden workspace
+        // has its frame stored before the next refresh corners it.
+        if let frame = args.frame, window.isFloating, !(args.failIfNoop && window.nodeWorkspace == targetWorkspace) {
+            window.setFloatingFrame(
+                topLeft: CGPoint(x: frame.x, y: frame.y),
+                size: CGSize(width: frame.width, height: frame.height),
+                on: targetWorkspace,
+            )
         }
         return moveWindowToWorkspace(window, targetWorkspace, io, focusFollowsWindow: args.focusFollowsWindow, failIfNoop: args.failIfNoop)
     }

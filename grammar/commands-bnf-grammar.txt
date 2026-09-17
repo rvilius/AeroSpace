@@ -55,7 +55,7 @@ aerospace -h;
     | move-node-to-monitor [<move_node_to_monitor2_flag>]... <monitor_pattern>... [<move_node_to_monitor2_flag>]...
 
     | move-node-to-workspace [--wrap-around|--focus-follows-window|--stdin|--no-stdin]... (next|prev) [--wrap-around|--focus-follows-window|--stdin|--no-stdin]...
-    | move-node-to-workspace [--fail-if-noop|--window-id <window_id>|--focus-follows-window]... <workspace> [--fail-if-noop|--window-id <window_id>|--focus-follows-window]...
+    | move-node-to-workspace [--fail-if-noop|--window-id <window_id>|--focus-follows-window|--frame <frame>]... <workspace> [--fail-if-noop|--window-id <window_id>|--focus-follows-window|--frame <frame>]...
 
     | move-workspace-to-monitor [--wrap-around] (left|down|up|right|next|prev) [--wrap-around]
     | move-workspace-to-monitor [--wrap-around] <monitor_pattern>... [--wrap-around]
@@ -136,6 +136,7 @@ aerospace -h;
     | --app-bundle-id <app_bundle_id>
     ;
 <output_format> ::= {{{ true }}};
+<frame> ::= {{{ true }}};
 
 <app_bundle_id> ::= {{{ aerospace list-apps --format '%{app-bundle-id}%{tab}%{app-name}' }}};
 <pid> ::= {{{ aerospace list-apps --format '%{app-pid}%{tab}%{app-name}' }}};

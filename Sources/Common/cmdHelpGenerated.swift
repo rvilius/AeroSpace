@@ -113,7 +113,8 @@ let move_node_to_workspace_help_generated = """
                                   [--stdin|--no-stdin]
                                   (next|prev)
        OR: move-node-to-workspace [-h|--help] [--focus-follows-window] [--fail-if-noop]
-                                  [--window-id <window-id>] <workspace-name>
+                                  [--window-id <window-id>] [--frame <x>,<y>,<width>,<height>]
+                                  <workspace-name>
     """
 let move_workspace_to_monitor_help_generated = """
     USAGE: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] [--wrap-around] (left|down|up|right)
